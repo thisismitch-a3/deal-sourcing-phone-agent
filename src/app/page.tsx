@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { getRestaurants, upsertRestaurant, getLatestSession } from '@/lib/storage';
+import { getRestaurants, upsertRestaurant, getLatestSession, deleteRestaurant } from '@/lib/storage';
 import { DEFAULT_AGENT_SETTINGS } from '@/lib/utils';
 import type { Restaurant, SearchSession, Voicemail, AgentSettings } from '@/lib/types';
 import StatCard from '@/components/StatCard';
@@ -85,6 +85,11 @@ export default function DashboardPage() {
       upsertRestaurant(updated);
       setRestaurants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
     });
+  }
+
+  function handleDelete(id: string) {
+    deleteRestaurant(id);
+    setRestaurants((prev) => prev.filter((r) => r.id !== id));
   }
 
   function handleStartCall(id: string) {
@@ -195,6 +200,7 @@ export default function DashboardPage() {
             key={r.id}
             restaurant={r}
             onStartCall={handleStartCall}
+            onDelete={handleDelete}
             isCallQueued={queuedIds.has(r.id)}
           />
         ))}

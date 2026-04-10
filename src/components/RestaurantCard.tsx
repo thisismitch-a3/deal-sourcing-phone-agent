@@ -8,12 +8,14 @@ import StatusBadge from './StatusBadge';
 interface RestaurantCardProps {
   restaurant: Restaurant;
   onStartCall: (id: string) => void;
+  onDelete: (id: string) => void;
   isCallQueued?: boolean;
 }
 
 export default function RestaurantCard({
   restaurant: r,
   onStartCall,
+  onDelete,
   isCallQueued = false,
 }: RestaurantCardProps) {
   const canCall =
@@ -24,6 +26,18 @@ export default function RestaurantCard({
 
   return (
     <div className="relative flex flex-col rounded-xl border border-zinc-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+      {/* Delete button */}
+      <button
+        onClick={(e) => { e.preventDefault(); onDelete(r.id); }}
+        className="absolute left-3 top-3 z-10 rounded-full p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+        aria-label="Delete"
+        title="Remove from dashboard"
+      >
+        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+        </svg>
+      </button>
+
       {/* Confirmed / not-suitable banner */}
       {r.confirmed && (
         <div className="absolute right-3 top-3 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
@@ -37,7 +51,7 @@ export default function RestaurantCard({
       )}
 
       <Link href={`/restaurant/${r.id}`} className="flex-1 p-5">
-        <h3 className="pr-20 text-base font-semibold text-zinc-900 leading-snug">
+        <h3 className="px-6 text-base font-semibold text-zinc-900 leading-snug">
           {r.name}
         </h3>
         <p className="mt-1 text-sm text-zinc-500">{r.address}</p>
