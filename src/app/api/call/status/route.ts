@@ -4,10 +4,66 @@ import type { CallStatus, CallStatusResponse } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-function mapVapiStatus(status: string | undefined): CallStatus {
+/**
+ * endedReason values that mean the call never actually connected / no conversation happened.
+ * These surface as 'failed' so the user can see why and retry.
+ */
+const FAILED_END_REASONS = new Set([
+  'customer-did-not-answer',
+  'customer-busy',
+  'voicemail',
+  'twilio-failed-to-connect-call',
+  'assistant-join-timed-out',
+  'assistant-not-found',
+  'assistant-not-valid',
+  'assistant-request-failed',
+  'call-start-error-vapi-not-connected',
+  'manually-canceled',
+]);
+
+function isFailedEndReason(reason: string): boolean {
+  if (FAILED_END_REASONS.has(reason)) return true;
+  if (reason.startsWith('call.start.error')) return true;
+  if (reason.startsWith('pipeline-error')) return true;
+  return false;
+}
+
+/** Human-readable explanation of why a call ended — shown as callError on the card. */
+function formatEndedReason(reason: string): string {
+  const map: Record<string, string> = {
+    'customer-did-not-answer':       'The call rang but no one answered.',
+    'customer-busy':                 'The line was busy.',
+    'voicemail':                     'The call went to voicemail (hung up per settings).',
+    'twilio-failed-to-connect-call': 'Carrier failed to connect the call.',
+    'assistant-join-timed-out':      'Vapi timed out before connecting.',
+    'silence-timed-out':             'The call timed out due to silence.',
+    'exceeded-max-duration':         'The call reached the maximum duration.',
+    'assistant-ended-call':          'The agent ended the call.',
+    'customer-ended-call':           'The restaurant hung up.',
+    'assistant-said-end-call-phrase':'The agent reached the end-call phrase.',
+    'assistant-forwarded-call':      'The call was forwarded.',
+    'manually-canceled':             'The call was cancelled.',
+  };
+  if (map[reason]) return map[reason];
+  if (reason.startsWith('pipeline-error-')) {
+    return `Pipeline error: ${reason.slice('pipeline-error-'.length).replace(/-/g, ' ')}.`;
+  }
+  if (reason.startsWith('call.start.error-')) {
+    return `Call start error: ${reason.slice('call.start.error-'.length).replace(/-/g, ' ')}.`;
+  }
+  return reason.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function mapVapiStatus(
+  status: string | undefined,
+  endedReason: string | undefined
+): CallStatus {
   if (!status) return 'calling';
   if (['queued', 'ringing', 'in-progress'].includes(status)) return 'calling';
-  if (status === 'ended') return 'complete';
+  if (status === 'ended') {
+    if (endedReason && isFailedEndReason(endedReason)) return 'failed';
+    return 'complete';
+  }
   return 'failed';
 }
 
@@ -33,24 +89,37 @@ export async function GET(request: NextRequest): Promise<Response> {
     const vapi = new VapiClient({ token: vapiKey });
     const call = await vapi.calls.get({ id: callId });
 
-    const status = mapVapiStatus(call.status);
+    const endedReason = call.endedReason as string | undefined;
+    const status = mapVapiStatus(call.status, endedReason);
 
-    // Transcript and recording URL live on call.artifact
     const artifact = call.artifact;
     const transcript = artifact?.transcript ?? null;
     const recordingUrl = artifact?.recordingUrl ?? null;
+
+    // When the call failed, include a human-readable error
+    const error =
+      status === 'failed' && endedReason ? formatEndedReason(endedReason) : undefined;
 
     return Response.json({
       callId,
       status,
       transcript,
       recordingUrl,
+      endedReason: endedReason ?? null,
+      ...(error ? { error } : {}),
     } satisfies CallStatusResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to get call status.';
     console.error('[call/status]', err);
     return Response.json(
-      { callId: '', status: 'failed', transcript: null, recordingUrl: null, error: message } satisfies CallStatusResponse,
+      {
+        callId: '',
+        status: 'failed',
+        transcript: null,
+        recordingUrl: null,
+        endedReason: null,
+        error: message,
+      } satisfies CallStatusResponse,
       { status: 500 }
     );
   }

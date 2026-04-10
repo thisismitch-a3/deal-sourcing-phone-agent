@@ -55,6 +55,9 @@ export default function RestaurantCard({
 
         <div className="mt-3">
           <StatusBadge status={r.callStatus} />
+          {r.callStatus === 'failed' && r.callError && (
+            <p className="mt-1 text-xs text-red-500 leading-snug">{r.callError}</p>
+          )}
         </div>
 
         {r.callStatus === 'awaiting-approval' && r.suggestedDishes.length > 0 && (

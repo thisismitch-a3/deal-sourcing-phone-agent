@@ -150,6 +150,7 @@ export interface CallStatusResponse {
   status?: CallStatus;
   transcript?: string | null;
   recordingUrl?: string | null;
+  endedReason?: string | null;   // raw Vapi endedReason — shown as callError when failed
   error?: string;
 }
 

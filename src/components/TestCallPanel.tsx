@@ -143,10 +143,11 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
             setSpecificDish('');
           } else if (statusData.status === 'failed') {
             stopPolling();
-            const failed: Restaurant = { ...withCallId, callStatus: 'failed' };
+            const reason = statusData.error ?? statusData.endedReason ?? 'Call failed.';
+            const failed: Restaurant = { ...withCallId, callStatus: 'failed', callError: reason };
             upsertRestaurant(failed);
             onRestaurantUpdated(failed);
-            setError('Call failed. Check the Vapi dashboard for details.');
+            setError(reason);
             setStatusMessage(null);
             setIsCalling(false);
           }
