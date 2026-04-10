@@ -59,6 +59,7 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
       transcript: null,
       recordingUrl: null,
       safeMenuOptions: [],
+      suggestedDishes: [],
       confirmed: false,
       notSuitable: false,
     };

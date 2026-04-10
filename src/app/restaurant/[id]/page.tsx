@@ -4,12 +4,57 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getRestaurantById, upsertRestaurant, getSessions } from '@/lib/storage';
-import { formatRating, formatPhone, formatDate } from '@/lib/utils';
-import type { Restaurant, SearchSession, CallStatusResponse } from '@/lib/types';
+import { formatRating, formatPhone, formatDate, generateId } from '@/lib/utils';
+import type { Restaurant, SearchSession, CallStatusResponse, SuggestedDish, CallStatus, MenuResearchResponse } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import AudioPlayer from '@/components/AudioPlayer';
 import ErrorMessage from '@/components/ErrorMessage';
 import LoadingSpinner from '@/components/LoadingSpinner';
+
+// ─── Inline sub-components ────────────────────────────────────────────────────
+
+function ConfidenceBadge({ confidence }: { confidence: SuggestedDish['confidence'] }) {
+  const cls =
+    confidence === 'high'
+      ? 'bg-green-100 text-green-700'
+      : confidence === 'medium'
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-zinc-100 text-zinc-600';
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {confidence}
+    </span>
+  );
+}
+
+function AddCustomDish({ onAdd }: { onAdd: (name: string) => void }) {
+  const [value, setValue] = useState('');
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setValue('');
+  }
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-2">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Add a custom dish…"
+        className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+      />
+      <button
+        type="submit"
+        disabled={!value.trim()}
+        className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+      >
+        Add
+      </button>
+    </form>
+  );
+}
 
 export default function RestaurantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,6 +130,86 @@ export default function RestaurantDetailPage() {
 
     return () => clearInterval(interval);
   }, [restaurant, session, handleStatusUpdate]);
+
+  // ── Menu research handlers ────────────────────────────────────────────────
+
+  function toggleDish(dishId: string) {
+    if (!restaurant) return;
+    const updated: Restaurant = {
+      ...restaurant,
+      suggestedDishes: restaurant.suggestedDishes.map((d) =>
+        d.id === dishId ? { ...d, approved: !d.approved } : d
+      ),
+    };
+    handleStatusUpdate(updated);
+  }
+
+  function handleApproveAndSchedule() {
+    if (!restaurant) return;
+    const updated: Restaurant = { ...restaurant, callStatus: 'approved' as CallStatus };
+    handleStatusUpdate(updated);
+  }
+
+  function handleCallAnyway() {
+    if (!restaurant) return;
+    const updated: Restaurant = {
+      ...restaurant,
+      callStatus: 'pending' as CallStatus,
+      suggestedDishes: [],
+    };
+    handleStatusUpdate(updated);
+  }
+
+  function handleAddDish(name: string) {
+    if (!restaurant) return;
+    const newDish: SuggestedDish = {
+      id: generateId(),
+      name,
+      confidence: 'high',
+      reasoning: 'Added manually.',
+      approved: true,
+    };
+    const updated: Restaurant = {
+      ...restaurant,
+      suggestedDishes: [...restaurant.suggestedDishes, newDish],
+    };
+    handleStatusUpdate(updated);
+  }
+
+  async function handleRegenerateResearch() {
+    if (!restaurant) return;
+    const researching: Restaurant = {
+      ...restaurant,
+      callStatus: 'researching' as CallStatus,
+      suggestedDishes: [],
+    };
+    handleStatusUpdate(researching);
+    try {
+      const res = await fetch('/api/menu/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: restaurant.id,
+          restaurantName: restaurant.name,
+          address: restaurant.address,
+          placeId: restaurant.placeId,
+          dietaryRestrictions: session?.dietaryRestrictions ?? '',
+          specificDish: session?.specificDish ?? '',
+        }),
+      });
+      const data: MenuResearchResponse = await res.json();
+      const updated: Restaurant = {
+        ...restaurant,
+        callStatus: (data.status === 'complete' && data.suggestedDishes.length > 0 ? 'awaiting-approval' : 'no-menu') as CallStatus,
+        suggestedDishes: data.suggestedDishes ?? [],
+      };
+      handleStatusUpdate(updated);
+    } catch {
+      handleStatusUpdate({ ...restaurant, callStatus: 'no-menu' as CallStatus, suggestedDishes: [] });
+    }
+  }
+
+  // ── Call handlers ─────────────────────────────────────────────────────────
 
   function markConfirmed() {
     if (!restaurant) return;
@@ -182,6 +307,106 @@ export default function RestaurantDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Menu research section */}
+      {r.callStatus === 'researching' && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <LoadingSpinner size="sm" />
+            <span className="text-sm text-zinc-600">Researching menu online…</span>
+          </div>
+        </div>
+      )}
+
+      {r.callStatus === 'awaiting-approval' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-amber-900">Review Suggested Dishes</h2>
+            <button
+              onClick={handleRegenerateResearch}
+              className="text-xs text-amber-700 underline hover:text-amber-900"
+            >
+              Regenerate
+            </button>
+          </div>
+          <p className="text-sm text-amber-800">
+            Approve the dishes you&apos;d like the agent to ask about. Dishes you approve will be injected into the call.
+          </p>
+
+          <div className="space-y-2">
+            {r.suggestedDishes.map((dish) => (
+              <div
+                key={dish.id}
+                className={`rounded-lg border p-3 flex items-start justify-between gap-3 transition-colors ${
+                  dish.approved
+                    ? 'border-green-300 bg-green-50'
+                    : 'border-amber-200 bg-white'
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-zinc-900">{dish.name}</span>
+                    <ConfidenceBadge confidence={dish.confidence} />
+                  </div>
+                  <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{dish.reasoning}</p>
+                </div>
+                <button
+                  onClick={() => toggleDish(dish.id)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    dish.approved
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                  }`}
+                >
+                  {dish.approved ? '✓ Approved' : 'Approve'}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <AddCustomDish onAdd={handleAddDish} />
+
+          <button
+            onClick={handleApproveAndSchedule}
+            disabled={r.suggestedDishes.filter((d) => d.approved).length === 0}
+            className="w-full rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+          >
+            Approve Selected &amp; Schedule Call
+            {r.suggestedDishes.filter((d) => d.approved).length > 0 && (
+              <span className="ml-1 opacity-75">
+                ({r.suggestedDishes.filter((d) => d.approved).length} dish{r.suggestedDishes.filter((d) => d.approved).length === 1 ? '' : 'es'})
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {r.callStatus === 'approved' && r.suggestedDishes.filter((d) => d.approved).length > 0 && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 p-5">
+          <h2 className="mb-3 font-semibold text-teal-800">Approved Dishes for Call</h2>
+          <ul className="space-y-1">
+            {r.suggestedDishes.filter((d) => d.approved).map((dish) => (
+              <li key={dish.id} className="flex items-start gap-2 text-sm text-teal-700">
+                <span className="mt-0.5 text-teal-500">✓</span>
+                <span>{dish.name}</span>
+                <ConfidenceBadge confidence={dish.confidence} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {r.callStatus === 'no-menu' && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          <p className="text-sm text-zinc-600">No menu found online for this restaurant.</p>
+          <button
+            onClick={handleCallAnyway}
+            className="mt-2 text-sm font-medium text-zinc-900 underline hover:text-zinc-600"
+          >
+            Call anyway (general dietary inquiry)
+          </button>
+        </div>
+      )}
 
       {/* Safe menu options */}
       {r.safeMenuOptions.length > 0 && (

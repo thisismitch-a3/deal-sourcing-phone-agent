@@ -112,6 +112,7 @@ export default function SearchPage() {
           transcript: null,
           recordingUrl: null,
           safeMenuOptions: [],
+          suggestedDishes: [],
           confirmed: false,
           notSuitable: false,
         };

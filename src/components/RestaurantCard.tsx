@@ -17,7 +17,9 @@ export default function RestaurantCard({
   isCallQueued = false,
 }: RestaurantCardProps) {
   const canCall =
-    r.callStatus === 'pending' && r.phone !== null && !isCallQueued;
+    (r.callStatus === 'approved' || r.callStatus === 'pending') &&
+    r.phone !== null &&
+    !isCallQueued;
   const canRetry = r.callStatus === 'failed' && r.phone !== null;
 
   return (
@@ -55,6 +57,16 @@ export default function RestaurantCard({
           <StatusBadge status={r.callStatus} />
         </div>
 
+        {r.callStatus === 'awaiting-approval' && r.suggestedDishes.length > 0 && (
+          <p className="mt-2 text-xs text-amber-700 font-medium">
+            {r.suggestedDishes.length} dish{r.suggestedDishes.length === 1 ? '' : 'es'} to review
+          </p>
+        )}
+        {r.callStatus === 'approved' && (
+          <p className="mt-2 text-xs text-teal-700 font-medium">
+            {r.suggestedDishes.filter((d) => d.approved).length} dish{r.suggestedDishes.filter((d) => d.approved).length === 1 ? '' : 'es'} approved — ready to call
+          </p>
+        )}
         {r.safeMenuOptions.length > 0 && (
           <p className="mt-2 text-xs text-green-700 font-medium">
             {r.safeMenuOptions.length} safe dish{r.safeMenuOptions.length === 1 ? '' : 'es'} found

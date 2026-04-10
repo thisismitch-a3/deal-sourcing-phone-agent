@@ -9,24 +9,35 @@ import {
 } from 'react';
 import { upsertRestaurant } from '@/lib/storage';
 import { delay } from '@/lib/utils';
-import type { Restaurant, SearchSession, CallStartResponse, CallStatusResponse, SummariseResponse } from '@/lib/types';
+import type {
+  Restaurant,
+  SearchSession,
+  AgentSettings,
+  CallStartResponse,
+  CallStatusResponse,
+  SummariseResponse,
+  MenuResearchResponse,
+} from '@/lib/types';
 
 export interface CallOrchestratorHandle {
   startQueue: () => void;
+  startResearch: () => void;
 }
 
 interface Props {
   restaurants: Restaurant[];
   searchSession: SearchSession | null;
+  agentSettings: AgentSettings | null;
   onUpdate: (updated: Restaurant) => void;
 }
 
 const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
-  function CallOrchestrator({ restaurants, searchSession, onUpdate }, ref) {
+  function CallOrchestrator({ restaurants, searchSession, agentSettings, onUpdate }, ref) {
     const restaurantsRef = useRef(restaurants);
     const pollingRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
     const failCountRef = useRef<Map<string, number>>(new Map());
     const isProcessingRef = useRef(false);
+    const isResearchingRef = useRef(false);
 
     // Keep ref in sync so callbacks always see latest list
     useEffect(() => {
@@ -99,17 +110,17 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
               await handleCallComplete(restaurant, data.transcript ?? null, data.recordingUrl ?? null);
             } else if (data.status === 'failed') {
               stopPolling(restaurant.id);
-              const updated: Restaurant = { ...restaurant, callStatus: 'failed' };
+              const updated: Restaurant = { ...restaurant, callStatus: 'failed', callError: data.error ?? 'Call ended with a failed status.' };
               upsertRestaurant(updated);
               onUpdate(updated);
             }
             // 'calling' — keep polling
-          } catch {
+          } catch (err) {
             const fails = (failCountRef.current.get(restaurant.id) ?? 0) + 1;
             failCountRef.current.set(restaurant.id, fails);
             if (fails >= 5) {
               stopPolling(restaurant.id);
-              const updated: Restaurant = { ...restaurant, callStatus: 'failed' };
+              const updated: Restaurant = { ...restaurant, callStatus: 'failed', callError: 'Lost contact with Vapi after 5 retries.' };
               upsertRestaurant(updated);
               onUpdate(updated);
             }
@@ -134,6 +145,76 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // ── Research ──────────────────────────────────────────────────────────────
+
+    const startResearch = useCallback(async () => {
+      if (isResearchingRef.current) return;
+      if (agentSettings?.menuResearchEnabled === false) return;
+
+      const toResearch = restaurantsRef.current.filter(
+        (r) => r.callStatus === 'pending'
+      );
+
+      if (toResearch.length === 0) return;
+
+      isResearchingRef.current = true;
+
+      try {
+        await Promise.allSettled(
+          toResearch.map(async (restaurant) => {
+            // Mark as researching
+            const researching: Restaurant = { ...restaurant, callStatus: 'researching' };
+            upsertRestaurant(researching);
+            onUpdate(researching);
+
+            try {
+              const res = await fetch('/api/menu/research', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  restaurantId: restaurant.id,
+                  restaurantName: restaurant.name,
+                  address: restaurant.address,
+                  placeId: restaurant.placeId,
+                  dietaryRestrictions: searchSession?.dietaryRestrictions ?? '',
+                  specificDish: searchSession?.specificDish ?? '',
+                }),
+              });
+              const data: MenuResearchResponse = await res.json();
+
+              if (data.status === 'complete' && data.suggestedDishes.length > 0) {
+                const updated: Restaurant = {
+                  ...restaurant,
+                  callStatus: 'awaiting-approval',
+                  suggestedDishes: data.suggestedDishes,
+                };
+                upsertRestaurant(updated);
+                onUpdate(updated);
+              } else {
+                const updated: Restaurant = {
+                  ...restaurant,
+                  callStatus: 'no-menu',
+                  suggestedDishes: [],
+                };
+                upsertRestaurant(updated);
+                onUpdate(updated);
+              }
+            } catch {
+              const updated: Restaurant = {
+                ...restaurant,
+                callStatus: 'no-menu',
+                suggestedDishes: [],
+              };
+              upsertRestaurant(updated);
+              onUpdate(updated);
+            }
+          })
+        );
+      } finally {
+        isResearchingRef.current = false;
+      }
+    }, [agentSettings, searchSession, onUpdate]);
+
     // ── Queue ─────────────────────────────────────────────────────────────────
 
     const startQueue = useCallback(async () => {
@@ -141,8 +222,9 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
       isProcessingRef.current = true;
 
       try {
+        // Accept 'approved' (research done) or 'pending' (research disabled / no-menu → call anyway)
         const pending = restaurantsRef.current.filter(
-          (r) => r.callStatus === 'pending' && r.phone
+          (r) => (r.callStatus === 'approved' || r.callStatus === 'pending') && r.phone
         );
 
         for (let i = 0; i < pending.length; i++) {
@@ -167,6 +249,7 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
                 rating: restaurant.rating,
                 dietaryRestrictions: searchSession?.dietaryRestrictions ?? 'No garlic, no soy — cross-contamination is fine',
                 specificDish: searchSession?.specificDish ?? '',
+                approvedDishes: restaurant.suggestedDishes.filter((d) => d.approved),
               }),
             });
 
@@ -185,7 +268,7 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
             }
           } catch (err) {
             console.error(`[CallOrchestrator] Failed to start call for ${restaurant.name}:`, err);
-            const failed: Restaurant = { ...restaurant, callStatus: 'failed' };
+            const failed: Restaurant = { ...restaurant, callStatus: 'failed', callError: err instanceof Error ? err.message : 'Failed to start call.' };
             upsertRestaurant(failed);
             onUpdate(failed);
           }
@@ -195,7 +278,7 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
       }
     }, [searchSession, onUpdate, startPolling]);
 
-    useImperativeHandle(ref, () => ({ startQueue }), [startQueue]);
+    useImperativeHandle(ref, () => ({ startQueue, startResearch }), [startQueue, startResearch]);
 
     return null; // invisible — logic only
   }

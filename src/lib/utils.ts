@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { WhisperContext, AgentSettings } from './types';
+import type { WhisperContext, AgentSettings, SuggestedDish } from './types';
 
 export function generateId(): string {
   return uuidv4();
@@ -56,6 +56,9 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   voicemailBehaviour: 'hang-up',
   voicemailScript:
     "Hi, this is a message for {restaurantName}. I'm calling on behalf of {ownerName} regarding menu options for someone with dietary restrictions. Please call back at your convenience. Thank you.",
+  menuResearchEnabled: true,
+  menuResearchMaxDishes: 3,
+  menuResearchConfidenceThreshold: 'low',
   updatedAt: '',
 };
 
@@ -76,11 +79,13 @@ export function buildVapiSystemPromptFromSettings({
   dietaryRestrictions,
   specificDish,
   settings,
+  approvedDishes,
 }: {
   restaurantName: string;
   dietaryRestrictions: string;
   specificDish: string;
   settings: AgentSettings;
+  approvedDishes?: SuggestedDish[];
 }): string {
   // Call-level restrictions override the settings default if provided
   const restrictions = dietaryRestrictions.trim() || settings.dietaryRestrictions;
@@ -116,9 +121,14 @@ export function buildVapiSystemPromptFromSettings({
           .replace(/\{ownerName\}/g, settings.ownerName)}" — then hang up.`
       : `- If you reach voicemail, hang up politely without leaving a message.`;
 
+  const approvedDishLine =
+    approvedDishes && approvedDishes.length > 0
+      ? `\n\nBefore the call, the following dishes were pre-identified as likely safe:\n${approvedDishes.map((d) => `- ${d.name}`).join('\n')}\nPlease confirm with the restaurant whether each of these is safe, and also ask generally what else on the menu might be safe.`
+      : '';
+
   return `You are a polite, conversational phone assistant calling ${restaurantName} on behalf of ${settings.ownerName}.
 
-Dietary restrictions to enquire about: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}
+Dietary restrictions to enquire about: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}${approvedDishLine}
 
 Your goals for this call:
 1. Briefly introduce yourself as calling on behalf of ${settings.ownerName}.

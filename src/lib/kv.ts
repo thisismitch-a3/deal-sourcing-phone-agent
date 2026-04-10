@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import type { WhisperContext, Voicemail, AgentSettings } from './types';
+import type { WhisperContext, Voicemail, AgentSettings, MenuResearch } from './types';
 
 // Upstash Redis client.
 // Supports both naming conventions:
@@ -120,6 +120,29 @@ export async function getAgentSettings(): Promise<AgentSettings | null> {
   if (!raw) return null;
   try {
     return typeof raw === 'string' ? JSON.parse(raw) : (raw as AgentSettings);
+  } catch {
+    return null;
+  }
+}
+
+// ─── Menu Research ────────────────────────────────────────────────────────────
+
+const menuResearchKey = (restaurantId: string) => `menu:${restaurantId}`;
+const MENU_RESEARCH_TTL = 60 * 60 * 24 * 7; // 7 days
+
+export async function saveMenuResearch(research: MenuResearch): Promise<void> {
+  const redis = getRedis();
+  await redis.set(menuResearchKey(research.restaurantId), JSON.stringify(research), {
+    ex: MENU_RESEARCH_TTL,
+  });
+}
+
+export async function getMenuResearch(restaurantId: string): Promise<MenuResearch | null> {
+  const redis = getRedis();
+  const raw = await redis.get<string>(menuResearchKey(restaurantId));
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : (raw as MenuResearch);
   } catch {
     return null;
   }

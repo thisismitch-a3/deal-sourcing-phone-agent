@@ -8,6 +8,23 @@ function hasSingleCallId(r: unknown): r is { id: string } {
   return typeof r === 'object' && r !== null && 'id' in r && typeof (r as { id: unknown }).id === 'string';
 }
 
+/**
+ * Normalise a phone number to E.164 format, which Vapi requires.
+ * Handles common North American inputs:
+ *   4374943600       → +14374943600
+ *   14374943600      → +14374943600
+ *   (437) 494-3600   → +14374943600
+ *   +14374943600     → +14374943600  (pass-through)
+ */
+function normalizePhone(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('+')) return trimmed; // already E.164
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits[0] === '1') return `+${digits}`;
+  return trimmed; // unknown format — pass through, Vapi will return a clear error
+}
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -32,6 +49,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
+    const normalizedPhone = normalizePhone(body.phone);
+
     // Load agent settings from Redis (fall back to defaults if not configured)
     const storedSettings = await getAgentSettings().catch(() => null);
     const settings = { ...DEFAULT_AGENT_SETTINGS, ...storedSettings };
@@ -43,11 +62,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       dietaryRestrictions: body.dietaryRestrictions,
       specificDish: body.specificDish,
       settings,
+      approvedDishes: body.approvedDishes ?? [],
     });
 
     const callResponse = await vapi.calls.create({
       phoneNumberId,
-      customer: { number: body.phone },
+      customer: { number: normalizedPhone },
       assistant: {
         firstMessage: buildFirstMessage(body.restaurantName, settings),
         model: {
@@ -76,7 +96,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // Save whisper context so inbound callbacks can identify the restaurant
     try {
-      await saveWhisperContext(body.phone, {
+      await saveWhisperContext(normalizedPhone, {
         restaurantId: body.restaurantId,
         restaurantName: body.restaurantName,
         address: body.address,
@@ -89,7 +109,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     } catch {
       // Non-fatal — whisper context save failure doesn't prevent the call
-      console.warn('Failed to save whisper context for', body.phone);
+      console.warn('Failed to save whisper context for', normalizedPhone);
     }
 
     return Response.json({ callId: call.id } satisfies CallStartResponse);

@@ -11,7 +11,11 @@ export function getRestaurants(): Restaurant[] {
   try {
     const raw = localStorage.getItem(RESTAURANTS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as Restaurant[];
+    const list = JSON.parse(raw) as Restaurant[];
+    // Backfill suggestedDishes for restaurants created before this field existed
+    return list.map((r) =>
+      Array.isArray(r.suggestedDishes) ? r : { ...r, suggestedDishes: [] }
+    );
   } catch {
     return [];
   }

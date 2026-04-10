@@ -1,6 +1,23 @@
 // ─── Call / Restaurant types (localStorage) ──────────────────────────────────
 
-export type CallStatus = 'pending' | 'calling' | 'complete' | 'failed' | 'no-phone';
+export type CallStatus =
+  | 'pending'
+  | 'researching'
+  | 'awaiting-approval'
+  | 'approved'
+  | 'no-menu'
+  | 'calling'
+  | 'complete'
+  | 'failed'
+  | 'no-phone';
+
+export interface SuggestedDish {
+  id: string;
+  name: string;
+  confidence: 'high' | 'medium' | 'low';
+  reasoning: string;
+  approved: boolean;
+}
 
 export interface Restaurant {
   id: string;
@@ -19,9 +36,13 @@ export interface Restaurant {
   transcript: string | null;
   recordingUrl: string | null;
   safeMenuOptions: string[];
+  // Menu research
+  suggestedDishes: SuggestedDish[];
   // User decisions
   confirmed: boolean;
   notSuitable: boolean;
+  // Last call error (shown on card when callStatus === 'failed')
+  callError?: string | null;
 }
 
 export interface SearchSession {
@@ -46,6 +67,17 @@ export interface SearchFormValues {
   dietaryRestrictions: string;
   whatToAsk: 'general' | 'specific-dish';
   specificDish: string;
+}
+
+// ─── Menu research types ──────────────────────────────────────────────────────
+
+export interface MenuResearch {
+  restaurantId: string;
+  restaurantName: string;
+  sourceUrl: string | null;
+  rawMenuText: string | null;
+  suggestedDishes: SuggestedDish[];
+  researchedAt: string;
 }
 
 // ─── Inbound types (Vercel KV / Upstash Redis) ───────────────────────────────
@@ -105,6 +137,7 @@ export interface CallStartRequest {
   rating: number | null;
   dietaryRestrictions: string;
   specificDish: string;
+  approvedDishes?: SuggestedDish[];
 }
 
 export interface CallStartResponse {
@@ -117,6 +150,22 @@ export interface CallStatusResponse {
   status?: CallStatus;
   transcript?: string | null;
   recordingUrl?: string | null;
+  error?: string;
+}
+
+export interface MenuResearchRequest {
+  restaurantId: string;
+  restaurantName: string;
+  address: string;
+  placeId: string;
+  dietaryRestrictions: string;
+  specificDish: string;
+}
+
+export interface MenuResearchResponse {
+  status: 'complete' | 'no-menu';
+  suggestedDishes: SuggestedDish[];
+  sourceUrl: string | null;
   error?: string;
 }
 
@@ -157,6 +206,11 @@ export interface AgentSettings {
   // Voicemail handling (outbound — when restaurant doesn't answer)
   voicemailBehaviour: 'hang-up' | 'leave-message';
   voicemailScript: string; // Placeholders: {restaurantName}, {ownerName}
+
+  // Menu research (pre-call)
+  menuResearchEnabled: boolean;
+  menuResearchMaxDishes: number;    // 2–4
+  menuResearchConfidenceThreshold: 'low' | 'medium' | 'high';
 
   // Metadata
   updatedAt: string;

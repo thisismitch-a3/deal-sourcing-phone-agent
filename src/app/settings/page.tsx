@@ -220,7 +220,7 @@ export default function SettingsPage() {
       >
         <Field
           label="Owner name"
-          hint='Used wherever the agent says "I\'m calling on behalf of…". Appears in the system prompt and whisper messages.'
+          hint="Used wherever the agent says &quot;I'm calling on behalf of…&quot;. Appears in the system prompt and whisper messages."
         >
           <input
             type="text"
@@ -343,6 +343,74 @@ export default function SettingsPage() {
             label="Hang up if no one can help"
           />
         </Field>
+      </Section>
+
+      {/* ── Menu Research ────────────────────────────────────────────────── */}
+      <Section
+        title="Menu Research"
+        description="Before calling, the app looks up the restaurant's website and uses Claude to suggest safe dishes for you to approve."
+      >
+        <Field
+          label="Enable menu pre-research?"
+          hint="When on, the app fetches each restaurant's website and identifies likely safe dishes before any call is made."
+        >
+          <Toggle
+            checked={settings.menuResearchEnabled}
+            onChange={(v) => update('menuResearchEnabled', v)}
+            label="Research menus before calling"
+          />
+        </Field>
+
+        {settings.menuResearchEnabled && (
+          <>
+            <Field
+              label={`Max dishes to suggest — ${settings.menuResearchMaxDishes}`}
+              hint="Maximum number of dishes Claude will suggest per restaurant."
+            >
+              <input
+                type="range"
+                min={2}
+                max={4}
+                step={1}
+                value={settings.menuResearchMaxDishes}
+                onChange={(e) => update('menuResearchMaxDishes', Number(e.target.value))}
+                className="w-full accent-zinc-900 cursor-pointer"
+              />
+              <div className="flex justify-between text-xs text-zinc-400 mt-1 select-none">
+                <span>2</span>
+                <span className="font-medium text-zinc-600">{settings.menuResearchMaxDishes}</span>
+                <span>4</span>
+              </div>
+            </Field>
+
+            <Field
+              label="Minimum confidence to show"
+              hint="Hide suggestions below this confidence level."
+            >
+              <RadioGroup
+                options={[
+                  {
+                    value: 'low',
+                    label: 'All dishes',
+                    description: 'Show high, medium, and low confidence suggestions.',
+                  },
+                  {
+                    value: 'medium',
+                    label: 'Medium and above',
+                    description: 'Hide low confidence dishes.',
+                  },
+                  {
+                    value: 'high',
+                    label: 'High confidence only',
+                    description: "Only show dishes Claude is confident are safe.",
+                  },
+                ]}
+                value={settings.menuResearchConfidenceThreshold}
+                onChange={(v) => update('menuResearchConfidenceThreshold', v as 'low' | 'medium' | 'high')}
+              />
+            </Field>
+          </>
+        )}
       </Section>
 
       {/* ── Whisper ──────────────────────────────────────────────────────── */}
