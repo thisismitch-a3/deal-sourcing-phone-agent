@@ -8,6 +8,7 @@ import StatCard from '@/components/StatCard';
 import RestaurantCard from '@/components/RestaurantCard';
 import VoicemailCard from '@/components/VoicemailCard';
 import CallOrchestrator, { type CallOrchestratorHandle } from '@/components/CallOrchestrator';
+import TestCallPanel from '@/components/TestCallPanel';
 
 export default function DashboardPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -44,6 +45,11 @@ export default function DashboardPage() {
     );
   }, []);
 
+  const handleRestaurantAdded = useCallback((restaurant: Restaurant) => {
+    upsertRestaurant(restaurant);
+    setRestaurants((prev) => [restaurant, ...prev]);
+  }, []);
+
   function handleStartCall(id: string) {
     setQueuedIds((prev) => new Set(prev).add(id));
     // Mark this single restaurant as the queue and fire
@@ -74,18 +80,24 @@ export default function DashboardPage() {
 
   if (total === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="mb-6 text-5xl">🍽️</div>
-        <h1 className="text-2xl font-bold text-zinc-900">No searches yet</h1>
-        <p className="mt-2 text-zinc-500">
-          Start by searching for restaurants near you.
-        </p>
-        <Link
-          href="/search"
-          className="mt-6 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white hover:bg-zinc-700 transition-colors"
-        >
-          Start Your First Search
-        </Link>
+      <div className="mx-auto max-w-lg space-y-8 py-16">
+        <div className="text-center">
+          <div className="mb-4 text-5xl">🍽️</div>
+          <h1 className="text-2xl font-bold text-zinc-900">No searches yet</h1>
+          <p className="mt-2 text-zinc-500">
+            Start by searching for restaurants near you.
+          </p>
+          <Link
+            href="/search"
+            className="mt-6 inline-block rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white hover:bg-zinc-700 transition-colors"
+          >
+            Start Your First Search
+          </Link>
+        </div>
+        <TestCallPanel
+          onRestaurantAdded={handleRestaurantAdded}
+          onRestaurantUpdated={handleUpdate}
+        />
       </div>
     );
   }
@@ -133,6 +145,12 @@ export default function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* Test call panel */}
+      <TestCallPanel
+        onRestaurantAdded={handleRestaurantAdded}
+        onRestaurantUpdated={handleUpdate}
+      />
 
       {/* Voicemails section */}
       {voicemails.length > 0 && (
