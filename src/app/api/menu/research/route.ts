@@ -25,32 +25,20 @@ function meetsThreshold(
   return CONFIDENCE_ORDER[confidence] >= CONFIDENCE_ORDER[threshold];
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#\d+;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
+/**
+ * Fetch a URL via Jina AI reader (r.jina.ai), which handles JavaScript-rendered
+ * sites and returns clean markdown text. No API key required.
+ */
 async function fetchMenuText(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(6000),
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MenuResearchBot/1.0)' },
+    const jinaUrl = `https://r.jina.ai/${url}`;
+    const res = await fetch(jinaUrl, {
+      signal: AbortSignal.timeout(20000),
+      headers: { 'Accept': 'text/plain', 'X-No-Cache': 'true' },
     });
-    const contentType = res.headers.get('content-type') ?? '';
-    if (contentType.includes('pdf') || contentType.includes('application/')) {
-      return null; // can't parse binary formats
-    }
-    const html = await res.text();
-    return stripHtml(html);
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.trim() || null;
   } catch {
     return null;
   }
@@ -96,40 +84,60 @@ export async function POST(request: NextRequest): Promise<Response> {
       const detailsRes = await fetch(detailsUrl, { signal: AbortSignal.timeout(5000) });
       const detailsData = await detailsRes.json();
       websiteUrl = detailsData?.result?.website ?? null;
+      console.log(`[menu/research] Google Places website for ${body.restaurantName}: ${websiteUrl ?? 'none'}`);
     } catch {
-      // Non-fatal — proceed to no-menu
+      console.log(`[menu/research] Google Places Details API failed for ${body.restaurantName}`);
     }
+
+    // ── Step 2: Fetch menu text ──────────────────────────────────────────────
+    let menuText: string | null = null;
+    let sourceUrl: string | null = websiteUrl;
 
     if (!websiteUrl) {
-      console.log(`[menu/research] No website URL found for placeId=${body.placeId} (${body.restaurantName})`);
-      return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: null, error: 'No website listed on Google Maps for this restaurant.' } satisfies MenuResearchResponse
-      );
-    }
+      // No website in Google Places — try a Google search via Jina as fallback
+      console.log(`[menu/research] No website URL — trying Google search fallback for ${body.restaurantName}`);
+      const city = body.address ? body.address.split(',').slice(1, 2).join('').trim() : '';
+      const searchQuery = `${body.restaurantName} ${city} menu`;
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+      console.log(`[menu/research] Search fallback URL: ${searchUrl}`);
+      menuText = await fetchMenuText(searchUrl);
+      console.log(`[menu/research] Search fallback text length: ${menuText?.length ?? 0}`);
+      sourceUrl = searchUrl;
+    } else {
+      // Fetch the restaurant's own website via Jina (handles JS-rendered SPAs)
+      console.log(`[menu/research] Fetching website via Jina: ${websiteUrl}`);
+      menuText = await fetchMenuText(websiteUrl);
+      console.log(`[menu/research] Home page text length: ${menuText?.length ?? 0}`);
 
-    // ── Step 2: Fetch website and extract text ───────────────────────────────
-    console.log(`[menu/research] Fetching website: ${websiteUrl}`);
-    let menuText = await fetchMenuText(websiteUrl);
-    console.log(`[menu/research] Home page text length: ${menuText?.length ?? 0}`);
-
-    // If home page has very little content, try /menu path
-    if (!menuText || menuText.length < 300) {
-      try {
-        const base = new URL(websiteUrl).origin;
-        const menuPageText = await fetchMenuText(`${base}/menu`);
-        console.log(`[menu/research] /menu page text length: ${menuPageText?.length ?? 0}`);
-        if (menuPageText && menuPageText.length > (menuText?.length ?? 0)) {
-          menuText = menuPageText;
+      // If home page has sparse content, try common menu path variations
+      if (!menuText || menuText.length < 300) {
+        try {
+          const base = new URL(websiteUrl).origin;
+          const pathsToTry = ['/menu', '/our-menu', '/food', '/dining'];
+          for (const path of pathsToTry) {
+            const candidate = await fetchMenuText(`${base}${path}`);
+            console.log(`[menu/research] ${path} text length: ${candidate?.length ?? 0}`);
+            if (candidate && candidate.length > (menuText?.length ?? 0)) {
+              menuText = candidate;
+            }
+          }
+        } catch {
+          // Ignore — URL parsing or fetch failure
         }
-      } catch {
-        // Ignore — URL parsing or fetch failure
       }
     }
 
     if (!menuText || menuText.length < 100) {
       console.log(`[menu/research] Insufficient text content (${menuText?.length ?? 0} chars) for ${body.restaurantName}`);
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl, error: `Website found (${websiteUrl}) but couldn't extract enough text content — it may require JavaScript to render.` } satisfies MenuResearchResponse
+        {
+          status: 'no-menu',
+          suggestedDishes: [],
+          sourceUrl,
+          error: websiteUrl
+            ? `Website found (${websiteUrl}) but couldn't extract enough text — the site may block automated access.`
+            : `No website listed on Google Maps, and the search fallback returned too little content.`,
+        } satisfies MenuResearchResponse
       );
     }
 
@@ -177,18 +185,18 @@ If you cannot identify any potentially safe dishes from this content, return [].
       if (match) {
         rawDishes = JSON.parse(match[0]);
       }
-      console.log(`[menu/research] Claude identified ${rawDishes.length} dishes`);
+      console.log(`[menu/research] Claude identified ${rawDishes.length} raw dishes`);
     } catch (claudeErr) {
       const msg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
       console.error(`[menu/research] Claude API error: ${msg}`);
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl, error: `AI analysis failed: ${msg}` } satisfies MenuResearchResponse
+        { status: 'no-menu', suggestedDishes: [], sourceUrl, error: `AI analysis failed: ${msg}` } satisfies MenuResearchResponse
       );
     }
 
     // ── Step 4: Validate, assign IDs, apply confidence threshold ────────────
     const validConfidences = new Set(['high', 'medium', 'low']);
-    let suggestedDishes: SuggestedDish[] = rawDishes
+    const suggestedDishes: SuggestedDish[] = rawDishes
       .filter((d) => d.name && validConfidences.has(d.confidence))
       .map((d) => ({
         id: generateId(),
@@ -203,7 +211,12 @@ If you cannot identify any potentially safe dishes from this content, return [].
 
     if (suggestedDishes.length === 0) {
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl, error: 'Claude analysed the menu but could not identify any dishes that are clearly safe given the dietary restrictions.' } satisfies MenuResearchResponse
+        {
+          status: 'no-menu',
+          suggestedDishes: [],
+          sourceUrl,
+          error: 'Claude analysed the menu but could not identify any dishes that are clearly safe given the dietary restrictions.',
+        } satisfies MenuResearchResponse
       );
     }
 
@@ -211,7 +224,7 @@ If you cannot identify any potentially safe dishes from this content, return [].
     const research: MenuResearch = {
       restaurantId: body.restaurantId,
       restaurantName: body.restaurantName,
-      sourceUrl: websiteUrl,
+      sourceUrl,
       rawMenuText: truncatedText,
       suggestedDishes,
       researchedAt: new Date().toISOString(),
@@ -226,7 +239,7 @@ If you cannot identify any potentially safe dishes from this content, return [].
     return Response.json({
       status: 'complete',
       suggestedDishes,
-      sourceUrl: websiteUrl,
+      sourceUrl,
     } satisfies MenuResearchResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Menu research failed.';
