@@ -154,6 +154,18 @@ export interface CallStatusResponse {
   error?: string;
 }
 
+export interface PlaceSuggestion {
+  placeId: string;
+  name: string;
+  address: string;
+  rating: number | null;
+}
+
+export interface PlacesAutocompleteResponse {
+  places: PlaceSuggestion[];
+  error?: string;
+}
+
 export interface MenuResearchRequest {
   restaurantId: string;
   restaurantName: string;
