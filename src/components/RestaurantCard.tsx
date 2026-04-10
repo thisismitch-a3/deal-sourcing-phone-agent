@@ -29,7 +29,7 @@ export default function RestaurantCard({
       {/* Delete button */}
       <button
         onClick={(e) => { e.preventDefault(); onDelete(r.id); }}
-        className="absolute left-3 top-3 z-10 rounded-full p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+        className="absolute right-3 top-3 z-10 rounded-full p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors"
         aria-label="Delete"
         title="Remove from dashboard"
       >
@@ -40,18 +40,18 @@ export default function RestaurantCard({
 
       {/* Confirmed / not-suitable banner */}
       {r.confirmed && (
-        <div className="absolute right-3 top-3 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+        <div className="absolute right-3 top-9 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
           ✓ Confirmed
         </div>
       )}
       {r.notSuitable && (
-        <div className="absolute right-3 top-3 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+        <div className="absolute right-3 top-9 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
           ✕ Not suitable
         </div>
       )}
 
       <Link href={`/restaurant/${r.id}`} className="flex-1 p-5">
-        <h3 className="px-6 text-base font-semibold text-zinc-900 leading-snug">
+        <h3 className="pr-8 text-base font-semibold text-zinc-900 leading-snug">
           {r.name}
         </h3>
         <p className="mt-1 text-sm text-zinc-500">{r.address}</p>
