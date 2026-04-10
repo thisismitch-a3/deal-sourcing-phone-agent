@@ -50,6 +50,7 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   // Menu research
   const [testDishes, setTestDishes] = useState<SuggestedDish[]>([]);
@@ -64,6 +65,7 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -75,6 +77,12 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset highlight when suggestions list changes
+  useEffect(() => {
+    setHighlightedIndex(-1);
+    itemRefs.current = [];
+  }, [suggestions]);
 
   // Debounced place search
   const searchPlaces = useCallback((q: string) => {
@@ -137,6 +145,30 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
     } finally {
       setIsResearching(false);
       setResearchDone(true);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showDropdown || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.min(highlightedIndex + 1, suggestions.length - 1);
+      setHighlightedIndex(next);
+      itemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = Math.max(highlightedIndex - 1, 0);
+      setHighlightedIndex(prev);
+      itemRefs.current[prev]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+        handleSelectPlace(suggestions[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setHighlightedIndex(-1);
     }
   }
 
@@ -403,9 +435,13 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
                     value={nameQuery}
                     onChange={(e) => handleNameChange(e.target.value)}
                     onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+                    onKeyDown={handleKeyDown}
                     disabled={isCalling}
                     className={inputCls}
                     autoComplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={showDropdown}
                   />
                   {isSearchingPlaces && (
                     <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -417,15 +453,21 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
 
               {/* Dropdown */}
               {showDropdown && suggestions.length > 0 && (
-                <div className="absolute z-50 mt-1 w-full rounded-lg border border-zinc-200 bg-white shadow-lg overflow-hidden">
-                  {suggestions.map((place) => (
+                <div className="absolute z-50 mt-1 w-full rounded-lg border border-zinc-200 bg-white shadow-lg overflow-hidden max-h-64 overflow-y-auto" role="listbox">
+                  {suggestions.map((place, idx) => (
                     <button
                       key={place.placeId}
+                      ref={(el) => { itemRefs.current[idx] = el; }}
+                      role="option"
+                      aria-selected={idx === highlightedIndex}
                       onMouseDown={(e) => {
                         e.preventDefault(); // prevent input blur before click
                         handleSelectPlace(place);
                       }}
-                      className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-zinc-50 transition-colors border-b border-zinc-100 last:border-0"
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                      className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors border-b border-zinc-100 last:border-0 ${
+                        idx === highlightedIndex ? 'bg-zinc-100' : 'hover:bg-zinc-50'
+                      }`}
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-zinc-900 truncate">{place.name}</p>
