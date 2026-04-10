@@ -12,7 +12,9 @@ export const dynamic = 'force-dynamic';
 // Vapi calls this endpoint when the Vapi number receives an inbound call.
 // We respond with an assistant config that:
 //  1. Immediately tries a warm transfer to Mitch's phone with a whisper
-//  2. Falls back to the AI voicemail agent if Mitch doesn't answer in 20s
+//     (mode: warm-transfer-experimental — puts customer on hold, dials Mitch,
+//      plays whisper only to Mitch before connecting)
+//  2. Falls back to the AI voicemail agent if Mitch doesn't answer
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const payload = await request.json();
@@ -26,7 +28,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     // Look up restaurant context by caller phone number
     const ctx = callerPhone ? await getWhisperContext(callerPhone).catch(() => null) : null;
 
-    // Generate whisper text via Claude
+    // Generate whisper text via Claude (or fall back to static message)
     let whisperText = FALLBACK_WHISPER(callerPhone ?? 'unknown number');
     if (ctx && anthropicKey) {
       try {
@@ -44,46 +46,88 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
     }
 
-    // Build the Vapi assistant response
-    // Note: the exact transferPlan shape may need adjustment based on Vapi API version.
-    // Refer to https://docs.vapi.ai for current warm-transfer / whisper configuration.
-    const assistantConfig = {
-      firstMessage: 'Please hold for just one moment.',
-      model: {
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-20250514',
-        messages: [{ role: 'system', content: INBOUND_FALLBACK_SYSTEM_PROMPT }],
-      },
-      voice: elevenLabsVoiceId
-        ? { provider: '11labs' as const, voiceId: elevenLabsVoiceId }
-        : { provider: 'openai' as const, voice: 'alloy' as const },
-      maxDurationSeconds: 600,
-      recordingEnabled: true,
-      // Warm transfer with whisper — Mitch hears the whisper, the restaurant does not.
-      // If Mitch doesn't answer within 20s, the fallback AI agent takes over.
-      ...(mitchPhone
-        ? {
-            transferPlan: {
-              mode: 'warm-transfer-say-message',
-              message: whisperText,
-              phoneNumber: mitchPhone,
-              timeout: 20,
+    // When Mitch's phone is configured:
+    //   - Use a transferCall tool so the AI routes to his number
+    //   - warm-transfer-experimental: puts caller on hold, rings Mitch, plays whisper
+    //     only to Mitch before connecting. If Mitch doesn't answer, the fallbackPlan
+    //     message plays and the AI voicemail agent stays on the call.
+    if (mitchPhone) {
+      return Response.json({
+        assistant: {
+          firstMessage: 'Please hold for just one moment.',
+          model: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-20250514',
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are a call routing assistant. Your only job is to immediately transfer this call using the transferCall tool. Do not greet or ask questions — invoke the transfer right now.',
+              },
+            ],
+          },
+          voice: elevenLabsVoiceId
+            ? { provider: '11labs', voiceId: elevenLabsVoiceId }
+            : { provider: 'openai', voice: 'alloy' },
+          maxDurationSeconds: 600,
+          artifactPlan: { recordingEnabled: true },
+          tools: [
+            {
+              type: 'transferCall',
+              destinations: [
+                {
+                  type: 'number',
+                  number: mitchPhone,
+                  // warm-transfer-experimental: puts caller on hold, dials Mitch,
+                  // plays `message` (whisper) only to Mitch, then connects them.
+                  // If Mitch doesn't answer: fallbackPlan takes over.
+                  transferPlan: {
+                    mode: 'warm-transfer-experimental',
+                    message: whisperText,
+                    fallbackPlan: {
+                      // Played to the caller when Mitch doesn't answer.
+                      // endCallEnabled: false keeps the AI agent on to take a voicemail.
+                      message:
+                        "I'm sorry, Mitchel is unavailable right now. Please leave your name, number, and a brief message after the tone and he'll get back to you shortly.",
+                      endCallEnabled: false,
+                    },
+                  },
+                },
+              ],
             },
-          }
-        : {}),
-    };
+          ],
+        },
+      });
+    }
 
-    return Response.json({ assistant: assistantConfig });
-  } catch (err) {
-    console.error('[inbound/webhook]', err);
-    // Return a minimal fallback assistant so the call still connects
+    // No MITCHEL_PHONE_NUMBER configured — run the fallback voicemail agent directly
     return Response.json({
       assistant: {
-        firstMessage: "Hi, you've reached Mitchel Campbell's restaurant inquiry line. Please leave a message after the tone.",
+        firstMessage:
+          "Hi, you've reached Mitchel Campbell's restaurant inquiry line. Mitchel is unavailable right now. Please leave your name, number, and a brief message and he'll get back to you shortly.",
+        model: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-20250514',
+          messages: [{ role: 'system', content: INBOUND_FALLBACK_SYSTEM_PROMPT }],
+        },
+        voice: elevenLabsVoiceId
+          ? { provider: '11labs', voiceId: elevenLabsVoiceId }
+          : { provider: 'openai', voice: 'alloy' },
+        maxDurationSeconds: 300,
+        artifactPlan: { recordingEnabled: true },
+      },
+    });
+  } catch (err) {
+    console.error('[inbound/webhook]', err);
+    // Minimal fallback so the call still connects even if our logic fails
+    return Response.json({
+      assistant: {
+        firstMessage:
+          "Hi, you've reached Mitchel Campbell's restaurant inquiry line. Please leave a message after the tone.",
         model: { provider: 'openai', model: 'gpt-4o-mini' },
         voice: { provider: 'openai', voice: 'alloy' },
         maxDurationSeconds: 300,
-        recordingEnabled: true,
+        artifactPlan: { recordingEnabled: true },
       },
     });
   }
