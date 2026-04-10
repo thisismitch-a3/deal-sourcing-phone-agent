@@ -55,6 +55,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const storedSettings = await getAgentSettings().catch(() => null);
     const settings = { ...DEFAULT_AGENT_SETTINGS, ...storedSettings };
 
+    console.log(`[call/start] phoneNumberId=${phoneNumberId} → calling ${normalizedPhone} for "${body.restaurantName}"`);
+
     const vapi = new VapiClient({ token: vapiKey });
 
     const systemPrompt = buildVapiSystemPromptFromSettings({

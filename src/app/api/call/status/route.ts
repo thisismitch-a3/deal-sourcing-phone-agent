@@ -48,6 +48,9 @@ function formatEndedReason(reason: string): string {
   if (reason.startsWith('pipeline-error-')) {
     return `Pipeline error: ${reason.slice('pipeline-error-'.length).replace(/-/g, ' ')}.`;
   }
+  if (reason === 'call.start.error-get-transport') {
+    return 'Vapi could not establish a carrier connection — check that VAPI_PHONE_NUMBER_ID is correct and the number is active in your Vapi dashboard.';
+  }
   if (reason.startsWith('call.start.error-')) {
     return `Call start error: ${reason.slice('call.start.error-'.length).replace(/-/g, ' ')}.`;
   }
