@@ -1,18 +1,21 @@
 import { Redis } from '@upstash/redis';
 import type { WhisperContext, Voicemail } from './types';
 
-// Upstash Redis client — env vars are set automatically when you add the
-// Upstash Redis integration via the Vercel Marketplace:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
+// Upstash Redis client.
+// Supports both naming conventions:
+//   - UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN  (Vercel Marketplace integration)
+//   - KV_REST_API_URL / KV_REST_API_TOKEN                (Vercel KV / older Upstash integration)
 function getRedis(): Redis {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url =
+    process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token =
+    process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
   if (!url || !token) {
     throw new Error(
-      'Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variables. ' +
-        'Add the Upstash Redis integration to your Vercel project.'
+      'Missing Redis environment variables. ' +
+        'Expected UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN ' +
+        'or KV_REST_API_URL + KV_REST_API_TOKEN.'
     );
   }
 
