@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getRestaurantById, upsertRestaurant } from '@/lib/storage';
+import { getRestaurantById, upsertRestaurant, getSessions } from '@/lib/storage';
 import { formatRating, formatPhone, formatDate } from '@/lib/utils';
-import type { Restaurant, CallStatusResponse } from '@/lib/types';
+import type { Restaurant, SearchSession, CallStatusResponse } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import AudioPlayer from '@/components/AudioPlayer';
 import ErrorMessage from '@/components/ErrorMessage';
@@ -14,12 +14,17 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 export default function RestaurantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [restaurant, setRestaurant] = useState<Restaurant | null | undefined>(undefined);
+  const [session, setSession] = useState<SearchSession | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Load from localStorage
+  // Load restaurant + its parent session from localStorage
   useEffect(() => {
     const r = getRestaurantById(id);
     setRestaurant(r ?? null);
+    if (r) {
+      const s = getSessions().find((s) => s.id === r.searchSessionId) ?? null;
+      setSession(s);
+    }
   }, [id]);
 
   // Auto-poll status while calling
@@ -40,7 +45,7 @@ export default function RestaurantDetailPage() {
         const data: CallStatusResponse = await res.json();
 
         if (data.status === 'complete') {
-          // Summarise transcript
+          // Summarise transcript using the actual session restrictions
           let safeMenuOptions: string[] = [];
           if (data.transcript) {
             try {
@@ -52,7 +57,7 @@ export default function RestaurantDetailPage() {
                   restaurantName: restaurant.name,
                   phone: restaurant.phone,
                   transcript: data.transcript,
-                  dietaryRestrictions: 'No garlic, no soy — cross-contamination is fine',
+                  dietaryRestrictions: session?.dietaryRestrictions ?? 'no garlic, no soy',
                 }),
               });
               const sumData = await sumRes.json();
@@ -79,7 +84,7 @@ export default function RestaurantDetailPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [restaurant, handleStatusUpdate]);
+  }, [restaurant, session, handleStatusUpdate]);
 
   function markConfirmed() {
     if (!restaurant) return;
@@ -106,8 +111,8 @@ export default function RestaurantDetailPage() {
           phone: restaurant.phone,
           address: restaurant.address,
           rating: restaurant.rating,
-          dietaryRestrictions: 'No garlic, no soy — cross-contamination is fine',
-          specificDish: '',
+          dietaryRestrictions: session?.dietaryRestrictions ?? 'no garlic, no soy',
+          specificDish: session?.specificDish ?? '',
         }),
       });
       const data = await res.json();
