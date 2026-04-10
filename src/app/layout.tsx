@@ -20,12 +20,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="flex items-center gap-2">
               <span className="text-lg font-bold text-zinc-900">Resto Phone Agent</span>
             </Link>
-            <Link
-              href="/search"
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 transition-colors"
-            >
-              New Search
-            </Link>
+            <nav className="flex items-center gap-3">
+              <Link
+                href="/settings"
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+              >
+                Settings
+              </Link>
+              <Link
+                href="/search"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 transition-colors"
+              >
+                New Search
+              </Link>
+            </nav>
           </div>
         </header>
 

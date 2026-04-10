@@ -132,3 +132,32 @@ export interface SummariseResponse {
   safeMenuOptions: string[];
   error?: string;
 }
+
+// ─── Agent Settings (stored in Redis) ────────────────────────────────────────
+
+export interface AgentSettings {
+  // Identity
+  ownerName: string;           // "Mitchel Campbell" — used in introductions
+  openingLine: string;         // First spoken message when the call connects
+
+  // Dietary restrictions
+  dietaryRestrictions: string; // Comma-separated, e.g. "garlic, soy"
+  crossContaminationOk: boolean;
+  restrictionNotes: string;    // Optional extra context for the agent
+
+  // Call behaviour
+  maxCallDurationSeconds: number; // 60–600
+  callStyle: 'brief' | 'thorough';
+  endCallIfUnableToHelp: boolean;
+
+  // Whisper (inbound callbacks)
+  whisperEnabled: boolean;
+  whisperStyle: 'brief' | 'detailed';
+
+  // Voicemail handling (outbound — when restaurant doesn't answer)
+  voicemailBehaviour: 'hang-up' | 'leave-message';
+  voicemailScript: string; // Placeholders: {restaurantName}, {ownerName}
+
+  // Metadata
+  updatedAt: string;
+}

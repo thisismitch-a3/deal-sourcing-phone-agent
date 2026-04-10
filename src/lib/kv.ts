@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import type { WhisperContext, Voicemail } from './types';
+import type { WhisperContext, Voicemail, AgentSettings } from './types';
 
 // Upstash Redis client.
 // Supports both naming conventions:
@@ -103,4 +103,24 @@ export async function markVoicemailReviewed(id: string): Promise<void> {
     pipeline.rpush(VOICEMAILS_KEY, item);
   }
   await pipeline.exec();
+}
+
+// ─── Agent Settings ───────────────────────────────────────────────────────────
+
+const SETTINGS_KEY = 'agent:settings';
+
+export async function saveAgentSettings(settings: AgentSettings): Promise<void> {
+  const redis = getRedis();
+  await redis.set(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export async function getAgentSettings(): Promise<AgentSettings | null> {
+  const redis = getRedis();
+  const raw = await redis.get<string>(SETTINGS_KEY);
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : (raw as AgentSettings);
+  } catch {
+    return null;
+  }
 }

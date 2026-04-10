@@ -1,10 +1,11 @@
 import type { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { getWhisperContext } from '@/lib/kv';
+import { getWhisperContext, getAgentSettings } from '@/lib/kv';
 import {
   buildWhisperPrompt,
   FALLBACK_WHISPER,
   INBOUND_FALLBACK_SYSTEM_PROMPT,
+  DEFAULT_AGENT_SETTINGS,
 } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -25,18 +26,23 @@ export async function POST(request: NextRequest): Promise<Response> {
     const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-    // Look up restaurant context by caller phone number
-    const ctx = callerPhone ? await getWhisperContext(callerPhone).catch(() => null) : null;
+    // Load whisper context + agent settings in parallel
+    const [ctx, storedSettings] = await Promise.all([
+      callerPhone ? getWhisperContext(callerPhone).catch(() => null) : Promise.resolve(null),
+      getAgentSettings().catch(() => null),
+    ]);
+
+    const settings = { ...DEFAULT_AGENT_SETTINGS, ...storedSettings };
 
     // Generate whisper text via Claude (or fall back to static message)
     let whisperText = FALLBACK_WHISPER(callerPhone ?? 'unknown number');
-    if (ctx && anthropicKey) {
+    if (settings.whisperEnabled && ctx && anthropicKey) {
       try {
         const client = new Anthropic({ apiKey: anthropicKey });
         const msg = await client.messages.create({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 256,
-          messages: [{ role: 'user', content: buildWhisperPrompt(ctx) }],
+          messages: [{ role: 'user', content: buildWhisperPrompt(ctx, settings.whisperStyle) }],
         });
         if (msg.content[0].type === 'text') {
           whisperText = msg.content[0].text.trim();
@@ -52,6 +58,20 @@ export async function POST(request: NextRequest): Promise<Response> {
     //     only to Mitch before connecting. If Mitch doesn't answer, the fallbackPlan
     //     message plays and the AI voicemail agent stays on the call.
     if (mitchPhone) {
+      // Only include the whisper message if whisper is enabled in settings
+      const transferPlan = settings.whisperEnabled
+        ? {
+            mode: 'warm-transfer-experimental',
+            message: whisperText,
+            fallbackPlan: {
+              message: `I'm sorry, ${settings.ownerName} is unavailable right now. Please leave your name, number, and a brief message after the tone and he'll get back to you shortly.`,
+              endCallEnabled: false,
+            },
+          }
+        : {
+            mode: 'blind-transfer',
+          };
+
       return Response.json({
         assistant: {
           firstMessage: 'Please hold for just one moment.',
@@ -78,20 +98,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                 {
                   type: 'number',
                   number: mitchPhone,
-                  // warm-transfer-experimental: puts caller on hold, dials Mitch,
-                  // plays `message` (whisper) only to Mitch, then connects them.
-                  // If Mitch doesn't answer: fallbackPlan takes over.
-                  transferPlan: {
-                    mode: 'warm-transfer-experimental',
-                    message: whisperText,
-                    fallbackPlan: {
-                      // Played to the caller when Mitch doesn't answer.
-                      // endCallEnabled: false keeps the AI agent on to take a voicemail.
-                      message:
-                        "I'm sorry, Mitchel is unavailable right now. Please leave your name, number, and a brief message after the tone and he'll get back to you shortly.",
-                      endCallEnabled: false,
-                    },
-                  },
+                  transferPlan,
                 },
               ],
             },
@@ -103,8 +110,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     // No MITCHEL_PHONE_NUMBER configured — run the fallback voicemail agent directly
     return Response.json({
       assistant: {
-        firstMessage:
-          "Hi, you've reached Mitchel Campbell's restaurant inquiry line. Mitchel is unavailable right now. Please leave your name, number, and a brief message and he'll get back to you shortly.",
+        firstMessage: `Hi, you've reached ${settings.ownerName}'s restaurant inquiry line. ${settings.ownerName} is unavailable right now. Please leave your name, number, and a brief message and he'll get back to you shortly.`,
         model: {
           provider: 'anthropic',
           model: 'claude-sonnet-4-20250514',

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { VapiClient } from '@vapi-ai/server-sdk';
-import { saveWhisperContext } from '@/lib/kv';
-import { buildFirstMessage, buildVapiSystemPrompt } from '@/lib/utils';
+import { saveWhisperContext, getAgentSettings } from '@/lib/kv';
+import { buildFirstMessage, buildVapiSystemPromptFromSettings, DEFAULT_AGENT_SETTINGS } from '@/lib/utils';
 import type { CallStartRequest, CallStartResponse } from '@/lib/types';
 
 function hasSingleCallId(r: unknown): r is { id: string } {
@@ -32,19 +32,24 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
+    // Load agent settings from Redis (fall back to defaults if not configured)
+    const storedSettings = await getAgentSettings().catch(() => null);
+    const settings = { ...DEFAULT_AGENT_SETTINGS, ...storedSettings };
+
     const vapi = new VapiClient({ token: vapiKey });
 
-    const systemPrompt = buildVapiSystemPrompt({
+    const systemPrompt = buildVapiSystemPromptFromSettings({
       restaurantName: body.restaurantName,
       dietaryRestrictions: body.dietaryRestrictions,
       specificDish: body.specificDish,
+      settings,
     });
 
     const callResponse = await vapi.calls.create({
       phoneNumberId,
       customer: { number: body.phone },
       assistant: {
-        firstMessage: buildFirstMessage(body.restaurantName),
+        firstMessage: buildFirstMessage(body.restaurantName, settings),
         model: {
           provider: 'anthropic',
           model: 'claude-sonnet-4-20250514',
@@ -54,7 +59,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           provider: '11labs',
           voiceId: elevenLabsVoiceId,
         },
-        maxDurationSeconds: 180,
+        maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
       },
     });
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         neighborhood: body.address.split(',')[0].trim(),
         rating: body.rating,
         safeMenuOptions: [],
-        dietaryRestrictions: body.dietaryRestrictions,
+        dietaryRestrictions: body.dietaryRestrictions || settings.dietaryRestrictions,
         outboundCallId: call.id,
         savedAt: new Date().toISOString(),
       });
