@@ -56,6 +56,7 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
   const [testDishes, setTestDishes] = useState<SuggestedDish[]>([]);
   const [isResearching, setIsResearching] = useState(false);
   const [researchDone, setResearchDone] = useState(false);
+  const [researchFailReason, setResearchFailReason] = useState<string | null>(null);
 
   // Call state
   const [isCalling, setIsCalling] = useState(false);
@@ -122,6 +123,7 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
     setIsResearching(true);
     setTestDishes([]);
     setResearchDone(false);
+    setResearchFailReason(null);
     try {
       const res = await fetch('/api/menu/research', {
         method: 'POST',
@@ -139,9 +141,11 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
       if (data.status === 'complete' && data.suggestedDishes.length > 0) {
         // Auto-approve all dishes to start
         setTestDishes(data.suggestedDishes.map((d) => ({ ...d, approved: true })));
+      } else {
+        setResearchFailReason(data.error ?? 'No menu content found online.');
       }
-    } catch {
-      // Non-fatal — proceed without dishes
+    } catch (err) {
+      setResearchFailReason(err instanceof Error ? err.message : 'Menu research request failed.');
     } finally {
       setIsResearching(false);
       setResearchDone(true);
@@ -498,7 +502,12 @@ export default function TestCallPanel({ onRestaurantAdded, onRestaurantUpdated }
               )}
 
               {!isResearching && researchDone && testDishes.length === 0 && (
-                <p className="text-xs text-zinc-500">No menu found — agent will ask general dietary questions.</p>
+                <p className="text-xs text-zinc-500">
+                  No menu found — agent will ask general dietary questions.
+                  {researchFailReason && (
+                    <span className="block mt-0.5 text-amber-600">{researchFailReason}</span>
+                  )}
+                </p>
               )}
 
               {!isResearching && testDishes.length > 0 && (

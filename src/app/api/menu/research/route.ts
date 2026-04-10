@@ -101,19 +101,23 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (!websiteUrl) {
+      console.log(`[menu/research] No website URL found for placeId=${body.placeId} (${body.restaurantName})`);
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: null } satisfies MenuResearchResponse
+        { status: 'no-menu', suggestedDishes: [], sourceUrl: null, error: 'No website listed on Google Maps for this restaurant.' } satisfies MenuResearchResponse
       );
     }
 
     // ── Step 2: Fetch website and extract text ───────────────────────────────
+    console.log(`[menu/research] Fetching website: ${websiteUrl}`);
     let menuText = await fetchMenuText(websiteUrl);
+    console.log(`[menu/research] Home page text length: ${menuText?.length ?? 0}`);
 
     // If home page has very little content, try /menu path
     if (!menuText || menuText.length < 300) {
       try {
         const base = new URL(websiteUrl).origin;
         const menuPageText = await fetchMenuText(`${base}/menu`);
+        console.log(`[menu/research] /menu page text length: ${menuPageText?.length ?? 0}`);
         if (menuPageText && menuPageText.length > (menuText?.length ?? 0)) {
           menuText = menuPageText;
         }
@@ -123,13 +127,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (!menuText || menuText.length < 100) {
+      console.log(`[menu/research] Insufficient text content (${menuText?.length ?? 0} chars) for ${body.restaurantName}`);
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl } satisfies MenuResearchResponse
+        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl, error: `Website found (${websiteUrl}) but couldn't extract enough text content — it may require JavaScript to render.` } satisfies MenuResearchResponse
       );
     }
 
     // Truncate to 8000 chars
     const truncatedText = menuText.slice(0, 8000);
+    console.log(`[menu/research] Sending ${truncatedText.length} chars to Claude for ${body.restaurantName}`);
 
     // ── Step 3: Claude analysis ──────────────────────────────────────────────
     const specificDishLine = body.specificDish
@@ -157,22 +163,26 @@ If you cannot identify any potentially safe dishes from this content, return [].
     try {
       const anthropic = new Anthropic({ apiKey: anthropicKey });
       const response = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
         messages: [{ role: 'user', content: claudePrompt }],
       });
       const text =
         response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
 
+      console.log(`[menu/research] Claude raw response: ${text.slice(0, 200)}`);
+
       // Extract JSON array from the response (Claude sometimes adds preamble)
       const match = text.match(/\[[\s\S]*\]/);
       if (match) {
         rawDishes = JSON.parse(match[0]);
       }
-    } catch {
-      // Claude failure → no-menu
+      console.log(`[menu/research] Claude identified ${rawDishes.length} dishes`);
+    } catch (claudeErr) {
+      const msg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
+      console.error(`[menu/research] Claude API error: ${msg}`);
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl } satisfies MenuResearchResponse
+        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl, error: `AI analysis failed: ${msg}` } satisfies MenuResearchResponse
       );
     }
 
@@ -189,9 +199,11 @@ If you cannot identify any potentially safe dishes from this content, return [].
       }))
       .filter((d) => meetsThreshold(d.confidence, settings.menuResearchConfidenceThreshold));
 
+    console.log(`[menu/research] After threshold filter: ${suggestedDishes.length} dishes`);
+
     if (suggestedDishes.length === 0) {
       return Response.json(
-        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl } satisfies MenuResearchResponse
+        { status: 'no-menu', suggestedDishes: [], sourceUrl: websiteUrl, error: 'Claude analysed the menu but could not identify any dishes that are clearly safe given the dietary restrictions.' } satisfies MenuResearchResponse
       );
     }
 
