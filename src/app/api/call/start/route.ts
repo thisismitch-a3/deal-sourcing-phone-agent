@@ -41,6 +41,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     const vapiKey = process.env.VAPI_API_KEY;
     const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
     const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
+    // Passed inline per-call so Vapi's dashboard credential storage is bypassed entirely.
+    // This works around Vapi's dashboard rejecting newer ElevenLabs workspace key formats.
+    const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!vapiKey || !phoneNumberId || !elevenLabsVoiceId) {
       return Response.json(
@@ -83,6 +86,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         },
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
+        // Pass ElevenLabs API key inline to bypass Vapi's dashboard credential
+        // storage, which rejects newer ElevenLabs workspace key formats.
+        ...(elevenLabsApiKey && {
+          credentials: [{ provider: '11labs', apiKey: elevenLabsApiKey }],
+        }),
       },
     });
 
