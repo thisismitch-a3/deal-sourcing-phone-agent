@@ -55,6 +55,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   restrictionNotes: '',
   dishPreferences: '',
   dishesToPrioritise: '',
+  foodsToAvoid: '',
   conversationStyleNotes: '',
   callEndingNotes: '',
   uncertaintyBehaviour: 'escalate',
@@ -157,6 +158,16 @@ export function buildVapiSystemPromptFromSettings({
     ? `\n\nDishes to ask about first: ${settings.dishesToPrioritise.trim()}`
     : '';
 
+  const foodsToAvoidLine = settings.foodsToAvoid?.trim()
+    ? `\n\nFoods I prefer not to eat (even if technically safe): ${settings.foodsToAvoid.trim()} — do not ask about or suggest these dishes.`
+    : '';
+
+  const ivrLine = `\n\nIf an automated phone system answers instead of a person:
+- Immediately try pressing 0 to reach an operator or front desk.
+- If 0 doesn't work, listen to the menu options and press the number most likely to reach a human (e.g. reservations, general enquiries, speak to staff).
+- If you cannot reach a human after 2 attempts, hang up politely.
+- Do not leave a voicemail on an automated system — only leave a message if a real person's personal voicemail answers.`;
+
   const conversationStyleLine = settings.conversationStyleNotes?.trim()
     ? `\n\nHow to conduct the conversation: ${settings.conversationStyleNotes.trim()}`
     : '';
@@ -224,7 +235,7 @@ ${identityInstruction}
 
 ${toneInstruction} ${fillerLine}${conversationStyleLine}
 
-You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionDetailsLine}${restrictionNotesLine}${dishesToPrioritiseLine}${dishPreferencesLine}${approvedDishLine}
+You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionDetailsLine}${restrictionNotesLine}${foodsToAvoidLine}${dishesToPrioritiseLine}${dishPreferencesLine}${approvedDishLine}
 
 Your goals for this call:
 1. Introduce yourself by your first name — say something like "Hi, my name is Mitchel" — keep it natural and brief.
@@ -243,6 +254,7 @@ ${uncertaintyLine}
 ${holdLine}
 - Do not mention cross-contamination concerns unless asked.
 - Do not recite a long list of restrictions — keep it natural and conversational.
+${ivrLine}
 ${voicemailLine}`;
 }
 

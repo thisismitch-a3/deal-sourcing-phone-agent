@@ -450,6 +450,19 @@ export default function SettingsPage() {
             </Field>
 
             <Field
+              label="Foods I prefer not to eat"
+              hint="Optional. Foods you simply don't enjoy — even if they're technically safe. The agent won't ask about or suggest these."
+            >
+              <textarea
+                rows={2}
+                value={settings.foodsToAvoid}
+                onChange={(e) => update('foodsToAvoid', e.target.value)}
+                placeholder="e.g. salads, fried food, heavy pasta dishes"
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
               label="Dishes to prioritise"
               hint="Optional. Types of dishes to ask about first. The agent leads with these when exploring safe options."
             >

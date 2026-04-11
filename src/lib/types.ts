@@ -210,6 +210,7 @@ export interface AgentSettings {
   restrictionNotes: string;
   dishPreferences: string;
   dishesToPrioritise: string;        // types of dishes to ask about first
+  foodsToAvoid: string;              // preference-based foods to skip (e.g. salads)
   conversationStyleNotes: string;    // tone/manner guidance for the conversation
   callEndingNotes: string;           // how to wrap up the call
   uncertaintyBehaviour: 'accept' | 'escalate' | 'ask-again';

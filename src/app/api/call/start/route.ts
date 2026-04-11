@@ -90,6 +90,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         },
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
+        // Enable DTMF so the agent can press keypad digits to navigate IVR menus
+        tools: [{ type: 'dtmf' }],
         // Pass ElevenLabs API key inline to bypass Vapi's dashboard credential
         // storage, which rejects newer ElevenLabs workspace key formats.
         ...(elevenLabsApiKey && {
