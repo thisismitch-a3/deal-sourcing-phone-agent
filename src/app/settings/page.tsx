@@ -351,10 +351,10 @@ export default function SettingsPage() {
 
             <SliderField
               label="Speaking speed"
-              hint="1.0 is normal speed. Higher values speak faster."
+              hint="1.0 is normal speed. Vapi caps ElevenLabs speed at 1.2×."
               value={settings.voiceSpeed}
               min={0.5}
-              max={2.0}
+              max={1.2}
               step={0.05}
               format={(v) => `${v.toFixed(2)}×`}
               onChange={(v) => update('voiceSpeed', v)}

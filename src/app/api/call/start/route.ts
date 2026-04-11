@@ -85,10 +85,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         voice: {
           provider: '11labs',
           voiceId: elevenLabsVoiceId,
-          stability: settings.voiceStability,
-          similarityBoost: settings.voiceSimilarityBoost,
-          speed: settings.voiceSpeed,
-          style: settings.voiceStyle,
+          // Vapi enforces: stability 0–1, similarityBoost 0–1, speed 0.5–1.2, style 0–1
+          stability: Math.min(Math.max(settings.voiceStability, 0), 1),
+          similarityBoost: Math.min(Math.max(settings.voiceSimilarityBoost, 0), 1),
+          speed: Math.min(Math.max(settings.voiceSpeed, 0.5), 1.2),
+          style: Math.min(Math.max(settings.voiceStyle, 0), 1),
         },
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
