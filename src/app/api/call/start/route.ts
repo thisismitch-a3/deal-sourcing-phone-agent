@@ -85,12 +85,16 @@ export async function POST(request: NextRequest): Promise<Response> {
         voice: {
           provider: '11labs',
           voiceId: elevenLabsVoiceId,
+          model: settings.elevenLabsModel || 'eleven_turbo_v2_5',
+          useSpeakerBoost: settings.useSpeakerBoost ?? true,
+          optimizeStreamingLatency: Math.min(Math.max(settings.optimizeStreamingLatency ?? 2, 2), 4),
           // Vapi enforces: stability 0–1, similarityBoost 0–1, speed 0.5–1.2, style 0–1
           stability: Math.min(Math.max(settings.voiceStability, 0), 1),
           similarityBoost: Math.min(Math.max(settings.voiceSimilarityBoost, 0), 1),
           speed: Math.min(Math.max(settings.voiceSpeed, 0.5), 1.2),
           style: Math.min(Math.max(settings.voiceStyle, 0), 1),
         },
+        backgroundSound: 'off',
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
         // Pass ElevenLabs API key inline to bypass Vapi's dashboard credential

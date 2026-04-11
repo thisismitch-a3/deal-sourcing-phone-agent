@@ -229,6 +229,9 @@ export interface AgentSettings {
   voiceSimilarityBoost: number;     // 0–1 (ElevenLabs)
   voiceSpeed: number;               // 0.5–2.0
   voiceStyle: number;               // 0–1 (ElevenLabs)
+  elevenLabsModel: 'eleven_turbo_v2_5' | 'eleven_multilingual_v2' | 'eleven_turbo_v2';
+  useSpeakerBoost: boolean;
+  optimizeStreamingLatency: number;  // 2–4
   fillerWordsEnabled: boolean;
   backgroundDenoisingEnabled: boolean;
 

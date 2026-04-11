@@ -372,6 +372,71 @@ export default function SettingsPage() {
             />
 
             <Field
+              label="ElevenLabs model"
+              hint="The speech synthesis model. Turbo v2.5 has the best voice quality for real-time calls."
+            >
+              <RadioGroup
+                options={[
+                  {
+                    value: 'eleven_turbo_v2_5',
+                    label: 'Turbo v2.5 (recommended)',
+                    description: 'Best quality for real-time voice calls.',
+                  },
+                  {
+                    value: 'eleven_multilingual_v2',
+                    label: 'Multilingual v2',
+                    description: 'Best for accents and non-English languages.',
+                  },
+                  {
+                    value: 'eleven_turbo_v2',
+                    label: 'Turbo v2',
+                    description: 'Faster but lower quality.',
+                  },
+                ]}
+                value={settings.elevenLabsModel}
+                onChange={(v) => update('elevenLabsModel', v as AgentSettings['elevenLabsModel'])}
+              />
+            </Field>
+
+            <Field
+              label="Speaker boost"
+              hint="Enhances voice presence and clarity — recommended on."
+            >
+              <Toggle
+                checked={settings.useSpeakerBoost}
+                onChange={(v) => update('useSpeakerBoost', v)}
+                label="Speaker boost"
+              />
+            </Field>
+
+            <Field
+              label="Streaming quality"
+              hint="Lower latency values sacrifice voice quality for speed."
+            >
+              <RadioGroup
+                options={[
+                  {
+                    value: '2',
+                    label: 'Best quality (latency 2)',
+                    description: 'Highest voice fidelity — slight delay.',
+                  },
+                  {
+                    value: '3',
+                    label: 'Balanced (latency 3)',
+                    description: 'Good quality with lower latency.',
+                  },
+                  {
+                    value: '4',
+                    label: 'Fastest (latency 4)',
+                    description: 'Lowest latency but reduced voice quality.',
+                  },
+                ]}
+                value={String(settings.optimizeStreamingLatency)}
+                onChange={(v) => update('optimizeStreamingLatency', Number(v))}
+              />
+            </Field>
+
+            <Field
               label="Filler words"
               hint='When on, the agent may say "um", "uh", or brief pauses to sound more natural.'
             >

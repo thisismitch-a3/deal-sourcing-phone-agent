@@ -74,6 +74,9 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   voiceSimilarityBoost: 0.75,
   voiceSpeed: 1.0,
   voiceStyle: 0.0,
+  elevenLabsModel: 'eleven_turbo_v2_5',
+  useSpeakerBoost: true,
+  optimizeStreamingLatency: 2,
   fillerWordsEnabled: false,
   backgroundDenoisingEnabled: true,
 
