@@ -79,6 +79,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           provider: 'anthropic',
           model: 'claude-sonnet-4-20250514',
           messages: [{ role: 'system', content: systemPrompt }],
+          // DTMF tool lets the agent press keypad digits to navigate IVR menus
+          tools: [{ type: 'dtmf' }],
         },
         voice: {
           provider: '11labs',
@@ -90,8 +92,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         },
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
-        // Enable DTMF so the agent can press keypad digits to navigate IVR menus
-        tools: [{ type: 'dtmf' }],
         // Pass ElevenLabs API key inline to bypass Vapi's dashboard credential
         // storage, which rejects newer ElevenLabs workspace key formats.
         ...(elevenLabsApiKey && {
