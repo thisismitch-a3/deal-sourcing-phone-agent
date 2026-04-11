@@ -79,6 +79,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   optimizeStreamingLatency: 2,
   fillerWordsEnabled: false,
   backgroundDenoisingEnabled: true,
+  backgroundSound: 'off',
 
   // Inbound / Callback
   whisperEnabled: true,

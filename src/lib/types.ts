@@ -234,6 +234,7 @@ export interface AgentSettings {
   optimizeStreamingLatency: number;  // 2–4
   fillerWordsEnabled: boolean;
   backgroundDenoisingEnabled: boolean;
+  backgroundSound: string;            // 'off', 'office', or custom audio URL
 
   // ── Inbound / Callback ──────────────────────────────────────────────────────
   whisperEnabled: boolean;

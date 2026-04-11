@@ -94,7 +94,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           speed: Math.min(Math.max(settings.voiceSpeed, 0.5), 1.2),
           style: Math.min(Math.max(settings.voiceStyle, 0), 1),
         },
-        backgroundSound: 'off',
+        backgroundSound: settings.backgroundSound || 'off',
         backgroundSpeechDenoisingPlan: {
           smartDenoisingPlan: { enabled: settings.backgroundDenoisingEnabled ?? true },
         },

@@ -449,7 +449,7 @@ export default function SettingsPage() {
 
             <Field
               label="Background denoising"
-              hint="Reduces background noise from the restaurant's environment."
+              hint="Reduces background noise from the restaurant's side using Krisp."
             >
               <Toggle
                 checked={settings.backgroundDenoisingEnabled}
@@ -457,6 +457,36 @@ export default function SettingsPage() {
                 label="Background noise reduction"
               />
             </Field>
+
+            <Field
+              label="Background sound"
+              hint="Ambient sound played on the agent's side during the call. Vapi defaults to 'office' for phone calls."
+            >
+              <RadioGroup
+                options={[
+                  { value: 'off', label: 'Off', description: 'Silence — no background sound.' },
+                  { value: 'office', label: 'Office', description: 'Subtle call centre ambience.' },
+                  { value: 'custom', label: 'Custom audio URL', description: 'Loop your own audio file.' },
+                ]}
+                value={settings.backgroundSound === 'off' || settings.backgroundSound === 'office' ? settings.backgroundSound : 'custom'}
+                onChange={(v) => update('backgroundSound', v === 'custom' ? '' : v)}
+              />
+            </Field>
+
+            {settings.backgroundSound !== 'off' && settings.backgroundSound !== 'office' && (
+              <Field
+                label="Custom audio URL"
+                hint="URL to an audio file (MP3, WAV). Vapi loops this during the call."
+              >
+                <input
+                  type="url"
+                  value={settings.backgroundSound}
+                  onChange={(e) => update('backgroundSound', e.target.value)}
+                  placeholder="https://example.com/ambient.mp3"
+                  className={inputCls}
+                />
+              </Field>
+            )}
           </Section>
 
           {/* ── 3. Dietary Restrictions & Conversation ─────────────────────── */}
