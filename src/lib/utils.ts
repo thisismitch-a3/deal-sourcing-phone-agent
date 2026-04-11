@@ -42,23 +42,66 @@ export function formatDate(iso: string): string {
 // ─── Agent Settings defaults ─────────────────────────────────────────────────
 
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
+  // Identity & Introduction
   ownerName: 'Mitchel Campbell',
   openingLine:
     "Hi, I'm calling on behalf of Mitchel Campbell. I had a quick question about your menu — do you have a moment?",
+  callerTone: 'friendly',
+
+  // Dietary Restrictions & Conversation
   dietaryRestrictions: 'garlic, soy',
   crossContaminationOk: true,
   restrictionNotes: '',
+  dishPreferences: '',
+  uncertaintyBehaviour: 'escalate',
+
+  // Call Behaviour
   maxCallDurationSeconds: 180,
   callStyle: 'brief',
   endCallIfUnableToHelp: true,
+  silenceTimeoutSeconds: 10,
+  holdBehaviour: 'wait',
+  maxRetries: 1,
+  retryDelayMinutes: 15,
+
+  // Voice & Audio
+  voiceStability: 0.5,
+  voiceSimilarityBoost: 0.75,
+  voiceSpeed: 1.0,
+  voiceStyle: 0.0,
+  fillerWordsEnabled: false,
+  backgroundDenoisingEnabled: true,
+
+  // Inbound / Callback
   whisperEnabled: true,
   whisperStyle: 'brief',
+  forwardingNumber: '',
+  ringTimeoutSeconds: 20,
+  fallbackBehaviour: 'voicemail',
+
+  // Voicemail handling (outbound)
   voicemailBehaviour: 'hang-up',
   voicemailScript:
     "Hi, this is a message for {restaurantName}. I'm calling on behalf of {ownerName} regarding menu options for someone with dietary restrictions. Please call back at your convenience. Thank you.",
+
+  // Menu Research
   menuResearchEnabled: true,
   menuResearchMaxDishes: 3,
   menuResearchConfidenceThreshold: 'low',
+
+  // Notifications
+  notifyOnCallComplete: false,
+  notifyEmail: '',
+  notifyOnMissedCallback: false,
+  webhookUrl: '',
+
+  // Dashboard Defaults
+  defaultSearchRadius: 5,
+  defaultMinRating: 3.5,
+  defaultCuisineType: '',
+  defaultMaxRestaurants: 10,
+  autoStartCalls: false,
+
   updatedAt: '',
 };
 
@@ -126,9 +169,38 @@ export function buildVapiSystemPromptFromSettings({
       ? `\n\nBefore the call, the following dishes were pre-identified as likely safe:\n${approvedDishes.map((d) => `- ${d.name}`).join('\n')}\nPlease confirm with the restaurant whether each of these is safe, and also ask generally what else on the menu might be safe.`
       : '';
 
+  const toneInstruction =
+    settings.callerTone === 'professional'
+      ? 'Speak in a professional, polished manner. Use complete sentences and formal language.'
+      : settings.callerTone === 'casual'
+      ? 'Speak casually and naturally — as if chatting with a neighbour. Contractions and informal language are fine.'
+      : 'Speak in a warm and friendly tone — approachable and conversational, not stiff.';
+
+  const fillerLine = settings.fillerWordsEnabled
+    ? 'You may use natural filler words ("um", "uh", "you know") and brief pauses to sound more human.'
+    : 'Speak clearly and avoid filler words.';
+
+  const dishPreferencesLine = settings.dishPreferences?.trim()
+    ? `\n\nDish preferences: ${settings.dishPreferences.trim()} — prioritise these types of dishes when asking about safe options.`
+    : '';
+
+  const uncertaintyLine =
+    settings.uncertaintyBehaviour === 'accept'
+      ? '- If the restaurant is unsure whether a dish is safe, accept their best guess and note it as uncertain.'
+      : settings.uncertaintyBehaviour === 'ask-again'
+      ? '- If the restaurant is unsure, gently rephrase the question once and ask again before accepting the answer.'
+      : '- If the restaurant is unsure, ask to speak with someone more knowledgeable (e.g. the chef or manager) before accepting the answer.';
+
+  const holdLine =
+    settings.holdBehaviour === 'hang-up'
+      ? '- If you are placed on hold, wait up to 30 seconds, then politely end the call.'
+      : '- If you are placed on hold, wait patiently for as long as needed.';
+
   return `You are a polite, conversational phone assistant calling ${restaurantName} on behalf of ${settings.ownerName}.
 
-Dietary restrictions to enquire about: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}${approvedDishLine}
+${toneInstruction} ${fillerLine}
+
+Dietary restrictions to enquire about: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}${dishPreferencesLine}${approvedDishLine}
 
 Your goals for this call:
 1. Briefly introduce yourself as calling on behalf of ${settings.ownerName}.
@@ -140,6 +212,8 @@ Your goals for this call:
 Important rules:
 - Do not make up or assume any menu items.
 ${endCallLine}
+${uncertaintyLine}
+${holdLine}
 - Do not mention cross-contamination concerns unless asked.
 - Do not read out a long list of restrictions — keep it concise.
 ${voicemailLine}`;

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Dark background circle -->
+  <rect width="32" height="32" rx="8" fill="#18181b"/>
+  <!-- Phone handset icon (white) -->
+  <path
+    fill="#ffffff"
+    d="M11.5 7C10.1 7 9 8.1 9 9.5v13C9 23.9 10.1 25 11.5 25h9c1.4 0 2.5-1.1 2.5-2.5v-13C23 8.1 21.9 7 20.5 7h-9zm0 1.5h9c.6 0 1 .4 1 1V21H10.5V9.5c0-.6.4-1 1-1zm4.5 14a1 1 0 110 2 1 1 0 010-2z"
+  />
+</svg>

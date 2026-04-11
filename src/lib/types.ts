@@ -198,33 +198,64 @@ export interface SummariseResponse {
 // ─── Agent Settings (stored in Redis) ────────────────────────────────────────
 
 export interface AgentSettings {
-  // Identity
-  ownerName: string;           // "Mitchel Campbell" — used in introductions
-  openingLine: string;         // First spoken message when the call connects
+  // ── Identity & Introduction ─────────────────────────────────────────────────
+  ownerName: string;
+  openingLine: string;
+  callerTone: 'professional' | 'friendly' | 'casual';
 
-  // Dietary restrictions
-  dietaryRestrictions: string; // Comma-separated, e.g. "garlic, soy"
+  // ── Dietary Restrictions & Conversation ────────────────────────────────────
+  dietaryRestrictions: string;
   crossContaminationOk: boolean;
-  restrictionNotes: string;    // Optional extra context for the agent
+  restrictionNotes: string;
+  dishPreferences: string;
+  uncertaintyBehaviour: 'accept' | 'escalate' | 'ask-again';
 
-  // Call behaviour
-  maxCallDurationSeconds: number; // 60–600
+  // ── Call Behaviour ──────────────────────────────────────────────────────────
+  maxCallDurationSeconds: number;   // 60–600
   callStyle: 'brief' | 'thorough';
   endCallIfUnableToHelp: boolean;
+  silenceTimeoutSeconds: number;    // 5–30
+  holdBehaviour: 'wait' | 'hang-up';
+  maxRetries: number;               // 0–3
+  retryDelayMinutes: number;        // 5–120
 
-  // Whisper (inbound callbacks)
+  // ── Voice & Audio ───────────────────────────────────────────────────────────
+  voiceStability: number;           // 0–1 (ElevenLabs)
+  voiceSimilarityBoost: number;     // 0–1 (ElevenLabs)
+  voiceSpeed: number;               // 0.5–2.0
+  voiceStyle: number;               // 0–1 (ElevenLabs)
+  fillerWordsEnabled: boolean;
+  backgroundDenoisingEnabled: boolean;
+
+  // ── Inbound / Callback ──────────────────────────────────────────────────────
   whisperEnabled: boolean;
   whisperStyle: 'brief' | 'detailed';
+  forwardingNumber: string;         // E.164
+  ringTimeoutSeconds: number;       // 10–30
+  fallbackBehaviour: 'voicemail' | 'agent' | 'hang-up';
 
-  // Voicemail handling (outbound — when restaurant doesn't answer)
+  // ── Voicemail handling (outbound) ───────────────────────────────────────────
   voicemailBehaviour: 'hang-up' | 'leave-message';
-  voicemailScript: string; // Placeholders: {restaurantName}, {ownerName}
+  voicemailScript: string;          // Placeholders: {restaurantName}, {ownerName}
 
-  // Menu research (pre-call)
+  // ── Menu Research ───────────────────────────────────────────────────────────
   menuResearchEnabled: boolean;
   menuResearchMaxDishes: number;    // 2–4
   menuResearchConfidenceThreshold: 'low' | 'medium' | 'high';
 
-  // Metadata
+  // ── Notifications ───────────────────────────────────────────────────────────
+  notifyOnCallComplete: boolean;
+  notifyEmail: string;
+  notifyOnMissedCallback: boolean;
+  webhookUrl: string;
+
+  // ── Dashboard Defaults ──────────────────────────────────────────────────────
+  defaultSearchRadius: number;      // 1–20 km
+  defaultMinRating: number;         // 0–5 in 0.5 steps
+  defaultCuisineType: string;
+  defaultMaxRestaurants: number;    // 5–20
+  autoStartCalls: boolean;
+
+  // ── Metadata ────────────────────────────────────────────────────────────────
   updatedAt: string;
 }

@@ -83,6 +83,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         voice: {
           provider: '11labs',
           voiceId: elevenLabsVoiceId,
+          stability: settings.voiceStability,
+          similarityBoost: settings.voiceSimilarityBoost,
+          speed: settings.voiceSpeed,
+          style: settings.voiceStyle,
         },
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
