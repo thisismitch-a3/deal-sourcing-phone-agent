@@ -95,6 +95,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           style: Math.min(Math.max(settings.voiceStyle, 0), 1),
         },
         backgroundSound: 'off',
+        backgroundSpeechDenoisingPlan: {
+          smartDenoisingPlan: { enabled: settings.backgroundDenoisingEnabled ?? true },
+        },
         maxDurationSeconds: settings.maxCallDurationSeconds,
         artifactPlan: { recordingEnabled: true },
         // Pass ElevenLabs API key inline to bypass Vapi's dashboard credential
