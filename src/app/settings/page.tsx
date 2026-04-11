@@ -268,12 +268,12 @@ export default function SettingsPage() {
 
           {/* ── 1. Identity & Introduction ─────────────────────────────────── */}
           <Section
-            title="Identity & Introduction"
-            description="Who the agent represents and how it introduces itself at the start of each call."
+            title="Your Identity"
+            description="The agent IS you — it speaks in first person as you, never as an assistant or bot."
           >
             <Field
-              label="Owner name"
-              hint='Used in "I\'m calling on behalf of…" and in voicemail scripts. Appears in every system prompt.'
+              label="Your name"
+              hint="The agent introduces itself using this name. It speaks as you — not on your behalf. Used in the opening line and voicemail scripts."
             >
               <input
                 type="text"
@@ -286,7 +286,7 @@ export default function SettingsPage() {
 
             <Field
               label="Opening line"
-              hint="The very first thing the agent says when the call connects. Use {restaurantName} as a placeholder."
+              hint="The very first thing said when the call connects. Spoken in first person as you — no mention of AI or assistants. Use {restaurantName} as a placeholder."
             >
               <textarea
                 rows={2}
@@ -602,7 +602,7 @@ export default function SettingsPage() {
             {settings.voicemailBehaviour === 'leave-message' && (
               <Field
                 label="Voicemail script"
-                hint="Use {restaurantName} and {ownerName} as placeholders."
+                hint="Spoken in first person as you. Use {restaurantName} and {ownerName} as placeholders."
               >
                 <textarea
                   rows={3}
@@ -679,8 +679,8 @@ export default function SettingsPage() {
             description="Settings for when a restaurant calls back your Vapi number."
           >
             <Field
-              label="Forwarding number"
-              hint="Your real phone number in E.164 format. Inbound calls will be warm-transferred here after the whisper plays. E.g. +16135551234."
+              label="Your phone number"
+              hint="Your real phone number in E.164 format. When a restaurant calls back, they'll be transferred to you after the whisper plays. E.g. +16135551234."
             >
               <input
                 type="tel"

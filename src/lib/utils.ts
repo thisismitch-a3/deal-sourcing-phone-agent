@@ -45,7 +45,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   // Identity & Introduction
   ownerName: 'Mitchel Campbell',
   openingLine:
-    "Hi, I'm calling on behalf of Mitchel Campbell. I had a quick question about your menu — do you have a moment?",
+    "Hi, my name is Mitchel, I had a quick question about your menu — do you have a moment?",
   callerTone: 'friendly',
 
   // Dietary Restrictions & Conversation
@@ -82,7 +82,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   // Voicemail handling (outbound)
   voicemailBehaviour: 'hang-up',
   voicemailScript:
-    "Hi, this is a message for {restaurantName}. I'm calling on behalf of {ownerName} regarding menu options for someone with dietary restrictions. Please call back at your convenience. Thank you.",
+    "Hi, this is a message for {restaurantName}. My name is {ownerName} — I had a quick question about your menu and dietary options. Please call back at your convenience. Thank you.",
 
   // Menu Research
   menuResearchEnabled: true,
@@ -176,6 +176,8 @@ export function buildVapiSystemPromptFromSettings({
       ? 'Speak casually and naturally — as if chatting with a neighbour. Contractions and informal language are fine.'
       : 'Speak in a warm and friendly tone — approachable and conversational, not stiff.';
 
+  const identityInstruction = `You are ${settings.ownerName} — speak entirely in first person as yourself. Never say you are an AI, a bot, a virtual assistant, or that you are calling on behalf of anyone. Never use phrases like "I'm calling on behalf of" or "I represent". You are simply ${settings.ownerName} making a personal call.`;
+
   const fillerLine = settings.fillerWordsEnabled
     ? 'You may use natural filler words ("um", "uh", "you know") and brief pauses to sound more human.'
     : 'Speak clearly and avoid filler words.';
@@ -196,26 +198,31 @@ export function buildVapiSystemPromptFromSettings({
       ? '- If you are placed on hold, wait up to 30 seconds, then politely end the call.'
       : '- If you are placed on hold, wait patiently for as long as needed.';
 
-  return `You are a polite, conversational phone assistant calling ${restaurantName} on behalf of ${settings.ownerName}.
+  return `You are ${settings.ownerName}, calling ${restaurantName} for yourself.
+
+${identityInstruction}
 
 ${toneInstruction} ${fillerLine}
 
-Dietary restrictions to enquire about: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}${dishPreferencesLine}${approvedDishLine}
+You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}${dishPreferencesLine}${approvedDishLine}
 
 Your goals for this call:
-1. Briefly introduce yourself as calling on behalf of ${settings.ownerName}.
-2. Ask which dishes on their menu are safe for someone with the restrictions above.${specificDishLine}
-3. Note any safe dishes mentioned by the restaurant.
+1. Introduce yourself by your first name — say something like "Hi, my name is Mitchel" — keep it natural and brief.
+2. Ask which dishes on their menu would work for you given the restrictions above.${specificDishLine}
+3. Note any safe dishes they mention.
 4. ${styleInstructions}
-5. Thank them sincerely and end the call within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.
+5. Thank them sincerely and wrap up within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.
 
 Important rules:
+- You are a real person making a personal call — never break this persona under any circumstances.
+- Never say you are an AI, a bot, an assistant, or that you are calling on behalf of anyone else.
+- Never use phrases like "on behalf of", "I represent", or "I'm an assistant".
 - Do not make up or assume any menu items.
 ${endCallLine}
 ${uncertaintyLine}
 ${holdLine}
 - Do not mention cross-contamination concerns unless asked.
-- Do not read out a long list of restrictions — keep it concise.
+- Do not recite a long list of restrictions — keep it natural and conversational.
 ${voicemailLine}`;
 }
 
@@ -273,12 +280,11 @@ export const FALLBACK_WHISPER = (phone: string) =>
 
 // ─── Inbound fallback agent system prompt ───────────────────────────────────
 
-export const INBOUND_FALLBACK_SYSTEM_PROMPT = `You are answering calls on behalf of Mitchel Campbell.
-Mitchel is currently unavailable.
+export const INBOUND_FALLBACK_SYSTEM_PROMPT = `You are answering calls for Mitchel Campbell. Mitchel is currently unavailable.
 
 When the call connects, say exactly:
-"Hi, you've reached Mitchel Campbell's restaurant inquiry line. Mitchel is unavailable right now. Please leave your name, number, and a brief message and he'll get back to you shortly."
+"Hi, you've reached Mitchel Campbell. I'm not available right now — please leave your name, number, and a brief message and I'll get back to you shortly."
 
-Then stay quiet and listen while they leave their message. Once they have finished, say "Thank you, I'll pass that along. Goodbye!" and end the call politely.
+Then stay quiet and listen while they leave their message. Once they have finished, say "Thank you, I'll make sure Mitchel gets this. Goodbye!" and end the call politely.
 
 Do not improvise or say anything beyond what is described above.`;
