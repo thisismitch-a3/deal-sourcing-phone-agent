@@ -424,27 +424,79 @@ export default function SettingsPage() {
             </Field>
 
             <Field
+              label="Restriction details"
+              hint="A detailed breakdown of what each restriction actually covers. The agent uses this to answer follow-up questions accurately."
+            >
+              <textarea
+                rows={3}
+                value={settings.restrictionDetails}
+                onChange={(e) => update('restrictionDetails', e.target.value)}
+                placeholder="e.g. Garlic includes garlic powder, garlic oil and garlic salt. Soy includes soy sauce, tofu, miso and edamame — but soy lecithin is fine."
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
               label="Extra restriction notes"
-              hint="Optional. Any context the agent should know. E.g. 'Garlic powder counts — not just fresh garlic.'"
+              hint="Optional. Any additional context. E.g. severity level, hidden sources to watch out for."
             >
               <textarea
                 rows={2}
                 value={settings.restrictionNotes}
                 onChange={(e) => update('restrictionNotes', e.target.value)}
-                placeholder="e.g. Garlic powder and garlic oil count — not just fresh garlic."
+                placeholder="e.g. Even small traces of garlic cause a reaction — not just a preference."
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
+              label="Dishes to prioritise"
+              hint="Optional. Types of dishes to ask about first. The agent leads with these when exploring safe options."
+            >
+              <textarea
+                rows={2}
+                value={settings.dishesToPrioritise}
+                onChange={(e) => update('dishesToPrioritise', e.target.value)}
+                placeholder="e.g. Fish, chicken, or beef dishes. Avoid heavy pasta or fried food."
                 className={inputCls}
               />
             </Field>
 
             <Field
               label="Dish preferences"
-              hint="Optional. Types of dishes to prioritise when asking about safe options. E.g. 'pasta, grilled fish, salads'."
+              hint="Optional. General style preferences that inform what the agent asks about. E.g. 'pasta, grilled fish, salads'."
             >
               <input
                 type="text"
                 value={settings.dishPreferences}
                 onChange={(e) => update('dishPreferences', e.target.value)}
                 placeholder="e.g. pasta, grilled fish, salads"
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
+              label="Conversation style notes"
+              hint="Optional. Tone or manner guidance specific to dietary conversations."
+            >
+              <textarea
+                rows={2}
+                value={settings.conversationStyleNotes}
+                onChange={(e) => update('conversationStyleNotes', e.target.value)}
+                placeholder="e.g. Be warm and slightly apologetic about the dietary questions — acknowledge it's a lot to ask."
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
+              label="How to end the call"
+              hint="Optional. Specific closing language or sentiment to use when wrapping up."
+            >
+              <textarea
+                rows={2}
+                value={settings.callEndingNotes}
+                onChange={(e) => update('callEndingNotes', e.target.value)}
+                placeholder="e.g. End warmly — say something like 'I'll definitely consider coming in, thanks so much for your help.'"
                 className={inputCls}
               />
             </Field>

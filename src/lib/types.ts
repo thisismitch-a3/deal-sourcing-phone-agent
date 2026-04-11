@@ -205,9 +205,13 @@ export interface AgentSettings {
 
   // ── Dietary Restrictions & Conversation ────────────────────────────────────
   dietaryRestrictions: string;
+  restrictionDetails: string;        // detailed breakdown of each restriction
   crossContaminationOk: boolean;
   restrictionNotes: string;
   dishPreferences: string;
+  dishesToPrioritise: string;        // types of dishes to ask about first
+  conversationStyleNotes: string;    // tone/manner guidance for the conversation
+  callEndingNotes: string;           // how to wrap up the call
   uncertaintyBehaviour: 'accept' | 'escalate' | 'ask-again';
 
   // ── Call Behaviour ──────────────────────────────────────────────────────────

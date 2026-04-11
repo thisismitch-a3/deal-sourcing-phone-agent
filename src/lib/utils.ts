@@ -50,9 +50,13 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
 
   // Dietary Restrictions & Conversation
   dietaryRestrictions: 'garlic, soy',
+  restrictionDetails: '',
   crossContaminationOk: true,
   restrictionNotes: '',
   dishPreferences: '',
+  dishesToPrioritise: '',
+  conversationStyleNotes: '',
+  callEndingNotes: '',
   uncertaintyBehaviour: 'escalate',
 
   // Call Behaviour
@@ -141,8 +145,24 @@ export function buildVapiSystemPromptFromSettings({
     ? ' Note: cross-contamination is fine — only dishes that directly contain these ingredients are a problem.'
     : ' Note: cross-contamination must also be avoided — even trace amounts are a concern.';
 
+  const restrictionDetailsLine = settings.restrictionDetails.trim()
+    ? `\n\nRestriction details — what each ingredient actually covers:\n${settings.restrictionDetails.trim()}`
+    : '';
+
   const restrictionNotesLine = settings.restrictionNotes.trim()
     ? `\n\nAdditional notes about restrictions: ${settings.restrictionNotes.trim()}`
+    : '';
+
+  const dishesToPrioritiseLine = settings.dishesToPrioritise?.trim()
+    ? `\n\nDishes to ask about first: ${settings.dishesToPrioritise.trim()}`
+    : '';
+
+  const conversationStyleLine = settings.conversationStyleNotes?.trim()
+    ? `\n\nHow to conduct the conversation: ${settings.conversationStyleNotes.trim()}`
+    : '';
+
+  const callEndingLine = settings.callEndingNotes?.trim()
+    ? `\n\nHow to end the call: ${settings.callEndingNotes.trim()}`
     : '';
 
   const maxMinutes = Math.ceil(settings.maxCallDurationSeconds / 60);
@@ -202,16 +222,16 @@ export function buildVapiSystemPromptFromSettings({
 
 ${identityInstruction}
 
-${toneInstruction} ${fillerLine}
+${toneInstruction} ${fillerLine}${conversationStyleLine}
 
-You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionNotesLine}${dishPreferencesLine}${approvedDishLine}
+You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionDetailsLine}${restrictionNotesLine}${dishesToPrioritiseLine}${dishPreferencesLine}${approvedDishLine}
 
 Your goals for this call:
 1. Introduce yourself by your first name — say something like "Hi, my name is Mitchel" — keep it natural and brief.
 2. Ask which dishes on their menu would work for you given the restrictions above.${specificDishLine}
 3. Note any safe dishes they mention.
 4. ${styleInstructions}
-5. Thank them sincerely and wrap up within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.
+5. Thank them sincerely and wrap up within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.${callEndingLine}
 
 Important rules:
 - You are a real person making a personal call — never break this persona under any circumstances.
