@@ -265,6 +265,22 @@ export interface AgentSettings {
   defaultMaxRestaurants: number;    // 5–20
   autoStartCalls: boolean;
 
+  // ── Custom Prompt Overrides ──────────────────────────────────────────────
+  customPromptIdentity: string;
+  customPromptDietary: string;
+  customPromptGoals: string;
+  customPromptRules: string;
+  customPromptVoicemail: string;
+
   // ── Metadata ────────────────────────────────────────────────────────────────
   updatedAt: string;
+}
+
+// ─── Prompt Section (used by per-section preview in Settings) ────────────────
+
+export interface PromptSection {
+  id: 'identity' | 'dietary' | 'goals' | 'rules' | 'voicemail';
+  title: string;
+  autoContent: string;
+  customContent: string;
 }

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import type { AgentSettings } from '@/lib/types';
-import { DEFAULT_AGENT_SETTINGS, buildVapiSystemPromptFromSettings } from '@/lib/utils';
+import type { AgentSettings, PromptSection } from '@/lib/types';
+import { DEFAULT_AGENT_SETTINGS, buildPromptSections, assemblePromptFromSections } from '@/lib/utils';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -158,6 +158,81 @@ function SliderField({
   );
 }
 
+function PromptSectionPreview({
+  section,
+  customValue,
+  onCustomChange,
+}: {
+  section: PromptSection;
+  customValue: string;
+  onCustomChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-zinc-100 pt-4 mt-4">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 transition-colors"
+      >
+        <svg
+          className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+            clipRule="evenodd"
+          />
+        </svg>
+        Prompt preview — {section.title}
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-600">
+              {section.autoContent}
+            </pre>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-zinc-700">Custom instructions</label>
+            <p className="text-xs text-zinc-400">Added to the end of the auto-generated prompt above.</p>
+            <textarea
+              rows={3}
+              value={customValue}
+              onChange={(e) => onCustomChange(e.target.value)}
+              placeholder="Add any additional instructions for this section…"
+              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
+            />
+            {customValue.length > 0 && (
+              <p className="text-xs text-zinc-400">{customValue.length} characters</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormattedPromptPreview({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-600">
+      {lines.map((line, i) => {
+        if (line.startsWith('## ')) {
+          return (
+            <span key={i} className="block mt-4 first:mt-0 mb-1 font-semibold text-zinc-800 text-sm font-sans">
+              {line.replace('## ', '')}{'\n'}
+            </span>
+          );
+        }
+        return <span key={i}>{line}{'\n'}</span>;
+      })}
+    </pre>
+  );
+}
+
 const inputCls =
   'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow';
 
@@ -220,15 +295,25 @@ export default function SettingsPage() {
   }
 
   // Live preview — rendered with "Example Restaurant" as a stand-in
-  const systemPromptPreview = useMemo(
+  const promptSections = useMemo(
     () =>
-      buildVapiSystemPromptFromSettings({
+      buildPromptSections({
         restaurantName: 'Example Restaurant',
         dietaryRestrictions: '',
         specificDish: '',
         settings,
       }),
     [settings]
+  );
+
+  const fullPromptPreview = useMemo(
+    () => assemblePromptFromSections(promptSections),
+    [promptSections]
+  );
+
+  const getSection = useCallback(
+    (id: PromptSection['id']) => promptSections.find((s) => s.id === id)!,
+    [promptSections]
   );
 
   if (loading) {
@@ -320,6 +405,12 @@ export default function SettingsPage() {
                 onChange={(v) => update('callerTone', v as AgentSettings['callerTone'])}
               />
             </Field>
+
+            <PromptSectionPreview
+              section={getSection('identity')}
+              customValue={settings.customPromptIdentity}
+              onCustomChange={(v) => update('customPromptIdentity', v)}
+            />
           </Section>
 
           {/* ── 2. Voice & Audio ───────────────────────────────────────────── */}
@@ -632,6 +723,12 @@ export default function SettingsPage() {
                 onChange={(v) => update('uncertaintyBehaviour', v as AgentSettings['uncertaintyBehaviour'])}
               />
             </Field>
+
+            <PromptSectionPreview
+              section={getSection('dietary')}
+              customValue={settings.customPromptDietary}
+              onCustomChange={(v) => update('customPromptDietary', v)}
+            />
           </Section>
 
           {/* ── 4. Call Behaviour ──────────────────────────────────────────── */}
@@ -733,6 +830,18 @@ export default function SettingsPage() {
                 onChange={(v) => update('retryDelayMinutes', v)}
               />
             )}
+
+            <PromptSectionPreview
+              section={getSection('goals')}
+              customValue={settings.customPromptGoals}
+              onCustomChange={(v) => update('customPromptGoals', v)}
+            />
+
+            <PromptSectionPreview
+              section={getSection('rules')}
+              customValue={settings.customPromptRules}
+              onCustomChange={(v) => update('customPromptRules', v)}
+            />
           </Section>
 
           {/* ── 5. Voicemail Handling ──────────────────────────────────────── */}
@@ -772,6 +881,12 @@ export default function SettingsPage() {
                 />
               </Field>
             )}
+
+            <PromptSectionPreview
+              section={getSection('voicemail')}
+              customValue={settings.customPromptVoicemail}
+              onCustomChange={(v) => update('customPromptVoicemail', v)}
+            />
           </Section>
 
           {/* ── 6. Menu Research ───────────────────────────────────────────── */}
@@ -1097,12 +1212,10 @@ export default function SettingsPage() {
               <span className="italic">"Example Restaurant"</span> is substituted with the real restaurant name at call time.
             </p>
             <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-              <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-600">
-                {systemPromptPreview}
-              </pre>
+              <FormattedPromptPreview text={fullPromptPreview} />
             </div>
             <p className="mt-2 text-xs text-zinc-400">
-              {systemPromptPreview.length.toLocaleString()} characters
+              {fullPromptPreview.length.toLocaleString()} characters
             </p>
           </div>
         </div>

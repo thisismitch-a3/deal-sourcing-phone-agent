@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { WhisperContext, AgentSettings, SuggestedDish } from './types';
+import type { WhisperContext, AgentSettings, SuggestedDish, PromptSection } from './types';
 
 export function generateId(): string {
   return uuidv4();
@@ -111,6 +111,13 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   defaultMaxRestaurants: 10,
   autoStartCalls: false,
 
+  // Custom Prompt Overrides
+  customPromptIdentity: '',
+  customPromptDietary: '',
+  customPromptGoals: '',
+  customPromptRules: '',
+  customPromptVoicemail: '',
+
   updatedAt: '',
 };
 
@@ -123,10 +130,10 @@ export function buildFirstMessage(restaurantName: string, settings?: AgentSettin
 }
 
 /**
- * Builds the system prompt for an outbound call using agent settings.
- * `dietaryRestrictions` from the call request takes precedence over the settings default.
+ * Builds the system prompt as discrete sections, each with auto-generated
+ * content and optional custom content from Settings.
  */
-export function buildVapiSystemPromptFromSettings({
+export function buildPromptSections({
   restaurantName,
   dietaryRestrictions,
   specificDish,
@@ -138,71 +145,12 @@ export function buildVapiSystemPromptFromSettings({
   specificDish: string;
   settings: AgentSettings;
   approvedDishes?: SuggestedDish[];
-}): string {
-  // Call-level restrictions override the settings default if provided
+}): PromptSection[] {
+  // ── Shared variables ───────────────────────────────────────────────────────
+
   const restrictions = dietaryRestrictions.trim() || settings.dietaryRestrictions;
 
-  const specificDishLine = specificDish
-    ? `\n- Ask specifically whether "${specificDish}" can be prepared without ${restrictions}.`
-    : '';
-
-  const crossContaminationLine = settings.crossContaminationOk
-    ? ' Note: cross-contamination is fine — only dishes that directly contain these ingredients are a problem.'
-    : ' Note: cross-contamination must also be avoided — even trace amounts are a concern.';
-
-  const restrictionDetailsLine = settings.restrictionDetails.trim()
-    ? `\n\nRestriction details — what each ingredient actually covers:\n${settings.restrictionDetails.trim()}`
-    : '';
-
-  const restrictionNotesLine = settings.restrictionNotes.trim()
-    ? `\n\nAdditional notes about restrictions: ${settings.restrictionNotes.trim()}`
-    : '';
-
-  const dishesToPrioritiseLine = settings.dishesToPrioritise?.trim()
-    ? `\n\nDishes to ask about first: ${settings.dishesToPrioritise.trim()}`
-    : '';
-
-  const foodsToAvoidLine = settings.foodsToAvoid?.trim()
-    ? `\n\nFoods I prefer not to eat (even if technically safe): ${settings.foodsToAvoid.trim()} — do not ask about or suggest these dishes.`
-    : '';
-
-  const ivrLine = `\n\nIf an automated phone system answers instead of a person:
-- Immediately try pressing 0 to reach an operator or front desk.
-- If 0 doesn't work, listen to the menu options and press the number most likely to reach a human (e.g. reservations, general enquiries, speak to staff).
-- If you cannot reach a human after 2 attempts, hang up politely.
-- Do not leave a voicemail on an automated system — only leave a message if a real person's personal voicemail answers.`;
-
-  const conversationStyleLine = settings.conversationStyleNotes?.trim()
-    ? `\n\nHow to conduct the conversation: ${settings.conversationStyleNotes.trim()}`
-    : '';
-
-  const callEndingLine = settings.callEndingNotes?.trim()
-    ? `\n\nHow to end the call: ${settings.callEndingNotes.trim()}`
-    : '';
-
-  const maxMinutes = Math.ceil(settings.maxCallDurationSeconds / 60);
-
-  const styleInstructions =
-    settings.callStyle === 'thorough'
-      ? `Be thorough — ask follow-up questions about ingredients and preparation methods if needed. It is fine to spend extra time getting complete, accurate information.`
-      : `Be warm, brief, and conversational — this should feel like a friendly enquiry, not an interrogation.`;
-
-  const endCallLine =
-    settings.endCallIfUnableToHelp
-      ? `- If they cannot help or don't know, thank them politely and end the call.`
-      : `- If the first person you speak with cannot help, politely ask to speak with someone who might know, such as the chef or manager.`;
-
-  const voicemailLine =
-    settings.voicemailBehaviour === 'leave-message'
-      ? `- If you reach voicemail, leave this message: "${settings.voicemailScript
-          .replace(/\{restaurantName\}/g, restaurantName)
-          .replace(/\{ownerName\}/g, settings.ownerName)}" — then hang up.`
-      : `- If you reach voicemail, hang up politely without leaving a message.`;
-
-  const approvedDishLine =
-    approvedDishes && approvedDishes.length > 0
-      ? `\n\nBefore the call, the following dishes were pre-identified as likely safe:\n${approvedDishes.map((d) => `- ${d.name}`).join('\n')}\nPlease confirm with the restaurant whether each of these is safe, and also ask generally what else on the menu might be safe.`
-      : '';
+  // ── Section 1: Identity & Persona ──────────────────────────────────────────
 
   const toneInstruction =
     settings.callerTone === 'professional'
@@ -217,9 +165,78 @@ export function buildVapiSystemPromptFromSettings({
     ? 'You may use natural filler words ("um", "uh", "you know") and brief pauses to sound more human.'
     : 'Speak clearly and avoid filler words.';
 
+  const conversationStyleLine = settings.conversationStyleNotes?.trim()
+    ? `\n\nHow to conduct the conversation: ${settings.conversationStyleNotes.trim()}`
+    : '';
+
+  const identityAuto = `You are ${settings.ownerName}, calling ${restaurantName} for yourself.
+
+${identityInstruction}
+
+${toneInstruction} ${fillerLine}${conversationStyleLine}`;
+
+  // ── Section 2: Dietary Restrictions ────────────────────────────────────────
+
+  const crossContaminationLine = settings.crossContaminationOk
+    ? ' Note: cross-contamination is fine — only dishes that directly contain these ingredients are a problem.'
+    : ' Note: cross-contamination must also be avoided — even trace amounts are a concern.';
+
+  const restrictionDetailsLine = settings.restrictionDetails.trim()
+    ? `\n\nRestriction details — what each ingredient actually covers:\n${settings.restrictionDetails.trim()}`
+    : '';
+
+  const restrictionNotesLine = settings.restrictionNotes.trim()
+    ? `\n\nAdditional notes about restrictions: ${settings.restrictionNotes.trim()}`
+    : '';
+
+  const foodsToAvoidLine = settings.foodsToAvoid?.trim()
+    ? `\n\nFoods I prefer not to eat (even if technically safe): ${settings.foodsToAvoid.trim()} — do not ask about or suggest these dishes.`
+    : '';
+
+  const dishesToPrioritiseLine = settings.dishesToPrioritise?.trim()
+    ? `\n\nDishes to ask about first: ${settings.dishesToPrioritise.trim()}`
+    : '';
+
   const dishPreferencesLine = settings.dishPreferences?.trim()
     ? `\n\nDish preferences: ${settings.dishPreferences.trim()} — prioritise these types of dishes when asking about safe options.`
     : '';
+
+  const approvedDishLine =
+    approvedDishes && approvedDishes.length > 0
+      ? `\n\nBefore the call, the following dishes were pre-identified as likely safe:\n${approvedDishes.map((d) => `- ${d.name}`).join('\n')}\nPlease confirm with the restaurant whether each of these is safe, and also ask generally what else on the menu might be safe.`
+      : '';
+
+  const dietaryAuto = `You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionDetailsLine}${restrictionNotesLine}${foodsToAvoidLine}${dishesToPrioritiseLine}${dishPreferencesLine}${approvedDishLine}`;
+
+  // ── Section 3: Call Goals ──────────────────────────────────────────────────
+
+  const specificDishLine = specificDish
+    ? `\n- Ask specifically whether "${specificDish}" can be prepared without ${restrictions}.`
+    : '';
+
+  const maxMinutes = Math.ceil(settings.maxCallDurationSeconds / 60);
+
+  const styleInstructions =
+    settings.callStyle === 'thorough'
+      ? `Be thorough — ask follow-up questions about ingredients and preparation methods if needed. It is fine to spend extra time getting complete, accurate information.`
+      : `Be warm, brief, and conversational — this should feel like a friendly enquiry, not an interrogation.`;
+
+  const callEndingLine = settings.callEndingNotes?.trim()
+    ? `\n\nHow to end the call: ${settings.callEndingNotes.trim()}`
+    : '';
+
+  const goalsAuto = `1. Introduce yourself by your first name — say something like "Hi, my name is Mitchel" — keep it natural and brief.
+2. Ask which dishes on their menu would work for you given the restrictions above.${specificDishLine}
+3. Note any safe dishes they mention.
+4. ${styleInstructions}
+5. Thank them sincerely and wrap up within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.${callEndingLine}`;
+
+  // ── Section 4: Important Rules ─────────────────────────────────────────────
+
+  const endCallLine =
+    settings.endCallIfUnableToHelp
+      ? `- If they cannot help or don't know, thank them politely and end the call.`
+      : `- If the first person you speak with cannot help, politely ask to speak with someone who might know, such as the chef or manager.`;
 
   const uncertaintyLine =
     settings.uncertaintyBehaviour === 'accept'
@@ -233,23 +250,7 @@ export function buildVapiSystemPromptFromSettings({
       ? '- If you are placed on hold, wait up to 30 seconds, then politely end the call.'
       : '- If you are placed on hold, wait patiently for as long as needed.';
 
-  return `You are ${settings.ownerName}, calling ${restaurantName} for yourself.
-
-${identityInstruction}
-
-${toneInstruction} ${fillerLine}${conversationStyleLine}
-
-You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionDetailsLine}${restrictionNotesLine}${foodsToAvoidLine}${dishesToPrioritiseLine}${dishPreferencesLine}${approvedDishLine}
-
-Your goals for this call:
-1. Introduce yourself by your first name — say something like "Hi, my name is Mitchel" — keep it natural and brief.
-2. Ask which dishes on their menu would work for you given the restrictions above.${specificDishLine}
-3. Note any safe dishes they mention.
-4. ${styleInstructions}
-5. Thank them sincerely and wrap up within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.${callEndingLine}
-
-Important rules:
-- You are a real person making a personal call — never break this persona under any circumstances.
+  const rulesAuto = `- You are a real person making a personal call — never break this persona under any circumstances.
 - Never say you are an AI, a bot, an assistant, or that you are calling on behalf of anyone else.
 - Never use phrases like "on behalf of", "I represent", or "I'm an assistant".
 - Do not make up or assume any menu items.
@@ -257,9 +258,64 @@ ${endCallLine}
 ${uncertaintyLine}
 ${holdLine}
 - Do not mention cross-contamination concerns unless asked.
-- Do not recite a long list of restrictions — keep it natural and conversational.
-${ivrLine}
-${voicemailLine}`;
+- Do not recite a long list of restrictions — keep it natural and conversational.`;
+
+  // ── Section 5: Phone Navigation & Voicemail ────────────────────────────────
+
+  const ivrBlock = `If an automated phone system answers instead of a person:
+- Immediately try pressing 0 to reach an operator or front desk.
+- If 0 doesn't work, listen to the menu options and press the number most likely to reach a human (e.g. reservations, general enquiries, speak to staff).
+- If you cannot reach a human after 2 attempts, hang up politely.
+- Do not leave a voicemail on an automated system — only leave a message if a real person's personal voicemail answers.`;
+
+  const voicemailLine =
+    settings.voicemailBehaviour === 'leave-message'
+      ? `If you reach voicemail, leave this message: "${settings.voicemailScript
+          .replace(/\{restaurantName\}/g, restaurantName)
+          .replace(/\{ownerName\}/g, settings.ownerName)}" — then hang up.`
+      : `If you reach voicemail, hang up politely without leaving a message.`;
+
+  const voicemailAuto = `${ivrBlock}\n\n${voicemailLine}`;
+
+  // ── Assemble sections array ────────────────────────────────────────────────
+
+  return [
+    { id: 'identity',  title: 'Identity & Persona',             autoContent: identityAuto,  customContent: settings.customPromptIdentity?.trim()  ?? '' },
+    { id: 'dietary',   title: 'Dietary Restrictions',            autoContent: dietaryAuto,   customContent: settings.customPromptDietary?.trim()   ?? '' },
+    { id: 'goals',     title: 'Call Goals',                      autoContent: goalsAuto,     customContent: settings.customPromptGoals?.trim()     ?? '' },
+    { id: 'rules',     title: 'Important Rules',                 autoContent: rulesAuto,     customContent: settings.customPromptRules?.trim()     ?? '' },
+    { id: 'voicemail', title: 'Phone Navigation & Voicemail',    autoContent: voicemailAuto, customContent: settings.customPromptVoicemail?.trim() ?? '' },
+  ];
+}
+
+/**
+ * Joins prompt sections into a single markdown-formatted string with ## headers.
+ */
+export function assemblePromptFromSections(sections: PromptSection[]): string {
+  return sections
+    .map((s) => {
+      let text = `## ${s.title}\n\n${s.autoContent}`;
+      if (s.customContent) {
+        text += `\n\n${s.customContent}`;
+      }
+      return text;
+    })
+    .join('\n\n');
+}
+
+/**
+ * Builds the system prompt for an outbound call using agent settings.
+ * `dietaryRestrictions` from the call request takes precedence over the settings default.
+ */
+export function buildVapiSystemPromptFromSettings(params: {
+  restaurantName: string;
+  dietaryRestrictions: string;
+  specificDish: string;
+  settings: AgentSettings;
+  approvedDishes?: SuggestedDish[];
+}): string {
+  const sections = buildPromptSections(params);
+  return assemblePromptFromSections(sections);
 }
 
 /**
