@@ -4,14 +4,9 @@ import type { CallStatus, CallStatusResponse } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * endedReason values that mean the call never actually connected / no conversation happened.
- * These surface as 'failed' so the user can see why and retry.
- */
 const FAILED_END_REASONS = new Set([
   'customer-did-not-answer',
   'customer-busy',
-  'voicemail',
   'twilio-failed-to-connect-call',
   'assistant-join-timed-out',
   'assistant-not-found',
@@ -28,18 +23,17 @@ function isFailedEndReason(reason: string): boolean {
   return false;
 }
 
-/** Human-readable explanation of why a call ended — shown as callError on the card. */
 function formatEndedReason(reason: string): string {
   const map: Record<string, string> = {
     'customer-did-not-answer':       'The call rang but no one answered.',
     'customer-busy':                 'The line was busy.',
-    'voicemail':                     'The call went to voicemail (hung up per settings).',
+    'voicemail':                     'Voicemail detected.',
     'twilio-failed-to-connect-call': 'Carrier failed to connect the call.',
     'assistant-join-timed-out':      'Vapi timed out before connecting.',
     'silence-timed-out':             'The call timed out due to silence.',
     'exceeded-max-duration':         'The call reached the maximum duration.',
     'assistant-ended-call':          'The agent ended the call.',
-    'customer-ended-call':           'The restaurant hung up.',
+    'customer-ended-call':           'The contact hung up.',
     'assistant-said-end-call-phrase':'The agent reached the end-call phrase.',
     'assistant-forwarded-call':      'The call was forwarded.',
     'manually-canceled':             'The call was cancelled.',
@@ -64,8 +58,12 @@ function mapVapiStatus(
   if (!status) return 'calling';
   if (['queued', 'ringing', 'in-progress'].includes(status)) return 'calling';
   if (status === 'ended') {
+    // Voicemail detection — treated as left-voicemail, not failed
+    if (endedReason === 'voicemail') return 'called-left-voicemail';
+    if (endedReason === 'customer-did-not-answer') return 'called-no-answer';
     if (endedReason && isFailedEndReason(endedReason)) return 'failed';
-    return 'complete';
+    // Normal end — the analyse endpoint will determine the final outcome
+    return 'called-interested'; // Temporary; real outcome set by analyse step
   }
   return 'failed';
 }
@@ -99,7 +97,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     const transcript = artifact?.transcript ?? null;
     const recordingUrl = artifact?.recordingUrl ?? null;
 
-    // When the call failed, include a human-readable error
     const error =
       status === 'failed' && endedReason ? formatEndedReason(endedReason) : undefined;
 

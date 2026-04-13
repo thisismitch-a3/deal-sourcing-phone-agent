@@ -1,33 +1,44 @@
-// ─── Call / Restaurant types (localStorage) ──────────────────────────────────
+// ─── Call / Business types (localStorage) ──────────────────────────────────
 
 export type CallStatus =
   | 'pending'
-  | 'researching'
-  | 'awaiting-approval'
+  | 'researched'
   | 'approved'
-  | 'no-menu'
   | 'calling'
-  | 'complete'
+  | 'called-interested'
+  | 'called-maybe'
+  | 'called-not-interested'
+  | 'called-left-voicemail'
+  | 'called-no-answer'
+  | 'called-wrong-contact'
+  | 'called-send-info'
+  | 'callback-received'
   | 'failed'
   | 'no-phone';
 
-export interface SuggestedDish {
-  id: string;
-  name: string;
-  confidence: 'high' | 'medium' | 'low';
-  reasoning: string;
-  approved: boolean;
+export interface CallHistoryEntry {
+  callId: string;
+  timestamp: string;
+  outcome: string;
+  transcript: string | null;
+  recordingUrl: string | null;
+  duration: number | null;
+  notes: string;
 }
 
-export interface Restaurant {
+export interface Business {
   id: string;
   searchSessionId: string;
   createdAt: string;
-  // Google Places data
-  name: string;
-  address: string;
-  rating: number | null;
+  // Business info
+  companyName: string;
+  contactName: string;
   phone: string | null;
+  email: string;
+  city: string;
+  industry: string;
+  description: string;
+  notes: string;
   placeId: string;
   // Call state
   callId: string | null;
@@ -35,12 +46,14 @@ export interface Restaurant {
   // Results
   transcript: string | null;
   recordingUrl: string | null;
-  safeMenuOptions: string[];
-  // Menu research
-  suggestedDishes: SuggestedDish[];
-  // User decisions
-  confirmed: boolean;
-  notSuitable: boolean;
+  // Research
+  researchNotes: string;
+  talkingPoints: string;
+  // Call history
+  callHistory: CallHistoryEntry[];
+  // Follow-up
+  followUpDate: string | null;
+  emailSent: boolean;
   // Last call error (shown on card when callStatus === 'failed')
   callError?: string | null;
 }
@@ -50,55 +63,49 @@ export interface SearchSession {
   createdAt: string;
   location: string;
   radius: number;
-  minRating: number;
-  maxRestaurants: number;
-  cuisineType: string;
-  dietaryRestrictions: string;
-  whatToAsk: 'general' | 'specific-dish';
-  specificDish: string;
+  maxBusinesses: number;
+  businessType: string;
+  source: 'search' | 'csv';
 }
 
 export interface SearchFormValues {
   location: string;
   radius: number;
-  minRating: number;
-  maxRestaurants: number;
-  cuisineType: string;
-  dietaryRestrictions: string;
-  whatToAsk: 'general' | 'specific-dish';
-  specificDish: string;
+  maxBusinesses: number;
+  businessType: string;
 }
 
-// ─── Menu research types ──────────────────────────────────────────────────────
+// ─── CSV Upload ──────────────────────────────────────────────────────────────
 
-export interface MenuResearch {
-  restaurantId: string;
-  restaurantName: string;
-  sourceUrl: string | null;
-  rawMenuText: string | null;
-  suggestedDishes: SuggestedDish[];
-  researchedAt: string;
+export interface CsvUploadRow {
+  companyName: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  city: string;
+  industry: string;
+  description: string;
+  notes: string;
 }
 
-// ─── Inbound types (Vercel KV / Upstash Redis) ───────────────────────────────
+// ─── Inbound types (Vercel KV / Upstash Redis) ─────────────────────────────
 
 export interface WhisperContext {
-  restaurantId: string;
-  restaurantName: string;
-  address: string;
-  neighborhood: string;
-  rating: number | null;
-  safeMenuOptions: string[];
-  dietaryRestrictions: string;
+  businessId: string;
+  companyName: string;
+  contactName: string;
+  city: string;
+  industry: string;
+  callOutcome: string;
   outboundCallId: string;
   savedAt: string;
 }
 
 export interface Voicemail {
   id: string;
-  restaurantPhone: string;
-  restaurantName: string | null;
-  restaurantId: string | null;
+  businessPhone: string;
+  businessName: string | null;
+  businessId: string | null;
   callId: string;
   recordingUrl: string | null;
   transcript: string | null;
@@ -106,38 +113,38 @@ export interface Voicemail {
   reviewed: boolean;
 }
 
-// ─── API request / response shapes ───────────────────────────────────────────
+// ─── API request / response shapes ──────────────────────────────────────────
 
 export interface SearchApiRequest {
   location: string;
   radius: number;
-  minRating: number;
-  maxRestaurants: number;
-  cuisineType: string;
+  maxBusinesses: number;
+  businessType: string;
 }
 
-export interface SearchApiRestaurant {
+export interface SearchApiBusiness {
   name: string;
   address: string;
-  rating: number | null;
   phone: string | null;
   placeId: string;
+  website?: string | null;
 }
 
 export interface SearchApiResponse {
-  restaurants: SearchApiRestaurant[];
+  businesses: SearchApiBusiness[];
   error?: string;
 }
 
 export interface CallStartRequest {
-  restaurantId: string;
-  restaurantName: string;
+  businessId: string;
+  companyName: string;
+  contactName: string;
   phone: string;
-  address: string;
-  rating: number | null;
-  dietaryRestrictions: string;
-  specificDish: string;
-  approvedDishes?: SuggestedDish[];
+  city: string;
+  industry: string;
+  description: string;
+  researchNotes: string;
+  talkingPoints: string;
 }
 
 export interface CallStartResponse {
@@ -150,7 +157,7 @@ export interface CallStatusResponse {
   status?: CallStatus;
   transcript?: string | null;
   recordingUrl?: string | null;
-  endedReason?: string | null;   // raw Vapi endedReason — shown as callError when failed
+  endedReason?: string | null;
   error?: string;
 }
 
@@ -158,7 +165,6 @@ export interface PlaceSuggestion {
   placeId: string;
   name: string;
   address: string;
-  rating: number | null;
 }
 
 export interface PlacesAutocompleteResponse {
@@ -166,120 +172,110 @@ export interface PlacesAutocompleteResponse {
   error?: string;
 }
 
-export interface MenuResearchRequest {
-  restaurantId: string;
-  restaurantName: string;
+export interface BusinessResearchRequest {
+  businessId: string;
+  companyName: string;
   address: string;
   placeId: string;
-  dietaryRestrictions: string;
-  specificDish: string;
+  industry: string;
 }
 
-export interface MenuResearchResponse {
-  status: 'complete' | 'no-menu';
-  suggestedDishes: SuggestedDish[];
+export interface BusinessResearchResponse {
+  status: 'complete' | 'no-info';
+  researchNotes: string;
+  suggestedTalkingPoints: string[];
   sourceUrl: string | null;
   error?: string;
 }
 
-export interface SummariseRequest {
-  restaurantId: string;
-  restaurantName: string;
+export type CallOutcome =
+  | 'interested'
+  | 'maybe'
+  | 'not-interested'
+  | 'wrong-contact'
+  | 'send-info'
+  | 'left-voicemail'
+  | 'no-answer';
+
+export interface AnalyseCallRequest {
+  businessId: string;
+  companyName: string;
+  contactName: string;
   phone: string;
   transcript: string;
-  dietaryRestrictions: string;
 }
 
-export interface SummariseResponse {
-  safeMenuOptions: string[];
+export interface AnalyseCallResponse {
+  outcome: CallOutcome;
+  notes: string;
+  followUpDate: string | null;
+  emailRequested: boolean;
   error?: string;
 }
 
-// ─── Agent Settings (stored in Redis) ────────────────────────────────────────
+// ─── Agent Settings (stored in Redis) ───────────────────────────────────────
 
 export interface AgentSettings {
-  // ── Identity & Introduction ─────────────────────────────────────────────────
-  ownerName: string;
-  openingLine: string;
-  callerTone: 'professional' | 'friendly' | 'casual';
+  // ── Agent Identity ─────────────────────────────────────────────────────────
+  agentName: string;
+  companyName: string;
+  companyPhone: string;
+  companyWebsite: string;
 
-  // ── Dietary Restrictions & Conversation ────────────────────────────────────
-  dietaryRestrictions: string;
-  restrictionDetails: string;        // detailed breakdown of each restriction
-  crossContaminationOk: boolean;
-  restrictionNotes: string;
-  dishPreferences: string;
-  dishesToPrioritise: string;        // types of dishes to ask about first
-  foodsToAvoid: string;              // preference-based foods to skip (e.g. salads)
-  conversationStyleNotes: string;    // tone/manner guidance for the conversation
-  callEndingNotes: string;           // how to wrap up the call
-  uncertaintyBehaviour: 'accept' | 'escalate' | 'ask-again';
+  // ── Buyer Profile ──────────────────────────────────────────────────────────
+  buyerDescription: string;
+  targetIndustries: string[];
+  revenueRange: string;
+  ebitdaRange: string;
+  geography: string;
+  maxPurchasePrice: string;
 
-  // ── Call Behaviour ──────────────────────────────────────────────────────────
-  maxCallDurationSeconds: number;   // 60–600
-  callStyle: 'brief' | 'thorough';
-  endCallIfUnableToHelp: boolean;
-  silenceTimeoutSeconds: number;    // 5–30
-  holdBehaviour: 'wait' | 'hang-up';
-  maxRetries: number;               // 0–3
-  retryDelayMinutes: number;        // 5–120
+  // ── Call Behavior ──────────────────────────────────────────────────────────
+  firstMessageMode: 'assistant-waits-for-user' | 'assistant-speaks-first';
+  screeningResponse: string;
+  maxCallDurationSeconds: number;    // 60–600
+  silenceTimeoutSeconds: number;     // 5–60
 
-  // ── Voice & Audio ───────────────────────────────────────────────────────────
-  voiceStability: number;           // 0–1 (ElevenLabs)
-  voiceSimilarityBoost: number;     // 0–1 (ElevenLabs)
-  voiceSpeed: number;               // 0.5–2.0
-  voiceStyle: number;               // 0–1 (ElevenLabs)
+  // ── Voicemail ──────────────────────────────────────────────────────────────
+  voicemailEnabled: boolean;
+  voicemailScript: string;
+  callbackNumber: string;
+
+  // ── Voice & Audio ──────────────────────────────────────────────────────────
+  voiceSpeed: number;                // 0.8–1.2
+  voiceStability: number;            // 0–1 (ElevenLabs)
+  voiceSimilarityBoost: number;      // 0–1 (ElevenLabs)
   elevenLabsModel: 'eleven_turbo_v2_5' | 'eleven_multilingual_v2' | 'eleven_turbo_v2';
   useSpeakerBoost: boolean;
-  optimizeStreamingLatency: number;  // 2–4
-  fillerWordsEnabled: boolean;
-  backgroundDenoisingEnabled: boolean;
-  backgroundSound: string;            // 'off', 'office', or custom audio URL
+  backgroundSound: string;           // 'off' or custom audio URL
 
-  // ── Inbound / Callback ──────────────────────────────────────────────────────
-  whisperEnabled: boolean;
-  whisperStyle: 'brief' | 'detailed';
-  forwardingNumber: string;         // E.164
-  ringTimeoutSeconds: number;       // 10–30
-  fallbackBehaviour: 'voicemail' | 'agent' | 'hang-up';
+  // ── Follow-up Email Template ───────────────────────────────────────────────
+  emailSubjectTemplate: string;
+  emailBodyTemplate: string;
 
-  // ── Voicemail handling (outbound) ───────────────────────────────────────────
-  voicemailBehaviour: 'hang-up' | 'leave-message';
-  voicemailScript: string;          // Placeholders: {restaurantName}, {ownerName}
-
-  // ── Menu Research ───────────────────────────────────────────────────────────
-  menuResearchEnabled: boolean;
-  menuResearchMaxDishes: number;    // 2–4
-  menuResearchConfidenceThreshold: 'low' | 'medium' | 'high';
-
-  // ── Notifications ───────────────────────────────────────────────────────────
-  notifyOnCallComplete: boolean;
-  notifyEmail: string;
-  notifyOnMissedCallback: boolean;
-  webhookUrl: string;
-
-  // ── Dashboard Defaults ──────────────────────────────────────────────────────
-  defaultSearchRadius: number;      // 1–20 km
-  defaultMinRating: number;         // 0–5 in 0.5 steps
-  defaultCuisineType: string;
-  defaultMaxRestaurants: number;    // 5–20
-  autoStartCalls: boolean;
-
-  // ── Custom Prompt Overrides ──────────────────────────────────────────────
+  // ── Custom Prompt Overrides ────────────────────────────────────────────────
   customPromptIdentity: string;
-  customPromptDietary: string;
-  customPromptGoals: string;
+  customPromptBuyer: string;
+  customPromptOpening: string;
+  customPromptHandling: string;
   customPromptRules: string;
   customPromptVoicemail: string;
 
-  // ── Metadata ────────────────────────────────────────────────────────────────
+  // ── Inbound / Callback ─────────────────────────────────────────────────────
+  whisperEnabled: boolean;
+  whisperStyle: 'brief' | 'detailed';
+  forwardingNumber: string;          // E.164
+  ringTimeoutSeconds: number;        // 10–30
+  fallbackBehaviour: 'voicemail' | 'agent' | 'hang-up';
+
+  // ── Metadata ───────────────────────────────────────────────────────────────
   updatedAt: string;
 }
 
-// ─── Prompt Section (used by per-section preview in Settings) ────────────────
+// ─── Prompt Section (used by per-section preview in Settings) ───────────────
 
 export interface PromptSection {
-  id: 'identity' | 'dietary' | 'goals' | 'rules' | 'voicemail';
+  id: 'identity' | 'buyer' | 'opening' | 'handling' | 'rules' | 'voicemail';
   title: string;
   autoContent: string;
   customContent: string;

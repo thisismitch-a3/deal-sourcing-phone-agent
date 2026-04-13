@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import type { WhisperContext, Voicemail, AgentSettings, MenuResearch } from './types';
+import type { WhisperContext, Voicemail, AgentSettings } from './types';
 
 // Upstash Redis client.
 // Supports both naming conventions:
@@ -22,7 +22,7 @@ function getRedis(): Redis {
   return new Redis({ url, token });
 }
 
-// ─── Whisper context ─────────────────────────────────────────────────────────
+// ─── Whisper context ────────────────────────────────────────────────────────
 
 const whisperKey = (phone: string) => `whisper:${phone}`;
 const WHISPER_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -50,28 +50,26 @@ export async function getWhisperContext(
   }
 }
 
-export async function updateWhisperMenuOptions(
+export async function updateWhisperOutcome(
   phone: string,
-  safeMenuOptions: string[]
+  callOutcome: string
 ): Promise<void> {
   const ctx = await getWhisperContext(phone);
   if (!ctx) return;
-  await saveWhisperContext(phone, { ...ctx, safeMenuOptions });
+  await saveWhisperContext(phone, { ...ctx, callOutcome });
 }
 
-// ─── Voicemails ──────────────────────────────────────────────────────────────
+// ─── Voicemails ─────────────────────────────────────────────────────────────
 
 const VOICEMAILS_KEY = 'voicemails';
 
 export async function saveVoicemail(voicemail: Voicemail): Promise<void> {
   const redis = getRedis();
-  // Store voicemails as a list (most recent first via LPUSH)
   await redis.lpush(VOICEMAILS_KEY, JSON.stringify(voicemail));
 }
 
 export async function getVoicemails(): Promise<Voicemail[]> {
   const redis = getRedis();
-  // Retrieve up to 100 voicemails
   const items = await redis.lrange<string>(VOICEMAILS_KEY, 0, 99);
   return items.map((item) => {
     try {
@@ -96,7 +94,6 @@ export async function markVoicemailReviewed(id: string): Promise<void> {
     }
   });
 
-  // Replace the list atomically
   const pipeline = redis.pipeline();
   pipeline.del(VOICEMAILS_KEY);
   for (const item of updated) {
@@ -105,7 +102,7 @@ export async function markVoicemailReviewed(id: string): Promise<void> {
   await pipeline.exec();
 }
 
-// ─── Agent Settings ───────────────────────────────────────────────────────────
+// ─── Agent Settings ─────────────────────────────────────────────────────────
 
 const SETTINGS_KEY = 'agent:settings';
 
@@ -125,24 +122,34 @@ export async function getAgentSettings(): Promise<AgentSettings | null> {
   }
 }
 
-// ─── Menu Research ────────────────────────────────────────────────────────────
+// ─── Business Research Cache ────────────────────────────────────────────────
 
-const menuResearchKey = (restaurantId: string) => `menu:${restaurantId}`;
-const MENU_RESEARCH_TTL = 60 * 60 * 24 * 7; // 7 days
+const researchKey = (businessId: string) => `research:${businessId}`;
+const RESEARCH_TTL = 60 * 60 * 24 * 7; // 7 days
 
-export async function saveMenuResearch(research: MenuResearch): Promise<void> {
+export interface BusinessResearchCache {
+  businessId: string;
+  companyName: string;
+  sourceUrl: string | null;
+  rawText: string | null;
+  researchNotes: string;
+  suggestedTalkingPoints: string[];
+  researchedAt: string;
+}
+
+export async function saveBusinessResearch(research: BusinessResearchCache): Promise<void> {
   const redis = getRedis();
-  await redis.set(menuResearchKey(research.restaurantId), JSON.stringify(research), {
-    ex: MENU_RESEARCH_TTL,
+  await redis.set(researchKey(research.businessId), JSON.stringify(research), {
+    ex: RESEARCH_TTL,
   });
 }
 
-export async function getMenuResearch(restaurantId: string): Promise<MenuResearch | null> {
+export async function getBusinessResearch(businessId: string): Promise<BusinessResearchCache | null> {
   const redis = getRedis();
-  const raw = await redis.get<string>(menuResearchKey(restaurantId));
+  const raw = await redis.get<string>(researchKey(businessId));
   if (!raw) return null;
   try {
-    return typeof raw === 'string' ? JSON.parse(raw) : (raw as MenuResearch);
+    return typeof raw === 'string' ? JSON.parse(raw) : (raw as BusinessResearchCache);
   } catch {
     return null;
   }

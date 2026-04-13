@@ -7,8 +7,8 @@ const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Resto Phone Agent',
-  description: 'AI-powered restaurant phone agent for dietary restrictions',
+  title: 'Deal Sourcing Phone Agent',
+  description: 'AI-powered phone agent for deal sourcing and business acquisition outreach',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:py-4 sm:px-6 lg:px-8">
             <Link href="/" className="flex items-center gap-2 min-w-0">
-              <span className="text-base sm:text-lg font-bold text-zinc-900 truncate">Resto Phone Agent</span>
+              <span className="text-base sm:text-lg font-bold text-zinc-900 truncate">Deal Sourcing Agent</span>
             </Link>
             <nav className="flex items-center gap-2 shrink-0 ml-3">
               {/* Settings — icon-only on mobile, labelled on sm+ */}
@@ -48,8 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 href="/search"
                 className="rounded-lg bg-zinc-900 px-3 py-2 sm:px-4 text-sm font-medium text-white hover:bg-zinc-700 transition-colors whitespace-nowrap"
               >
-                <span className="sm:hidden">Search</span>
-                <span className="hidden sm:inline">New Search</span>
+                <span className="sm:hidden">Find</span>
+                <span className="hidden sm:inline">Find Businesses</span>
               </Link>
             </nav>
           </div>
@@ -60,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         <footer className="border-t border-zinc-200 py-4 text-center text-xs text-zinc-400">
-          Resto Phone Agent · Built for Mitchel Campbell
+          Deal Sourcing Phone Agent · Built for Mitchel Campbell
         </footer>
       </body>
     </html>

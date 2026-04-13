@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { WhisperContext, AgentSettings, SuggestedDish, PromptSection } from './types';
+import type { WhisperContext, AgentSettings, PromptSection } from './types';
 
 export function generateId(): string {
   return uuidv4();
@@ -20,11 +20,6 @@ export function formatPhone(raw: string): string {
   return raw;
 }
 
-export function formatRating(n: number | null): string {
-  if (n === null) return 'No rating';
-  return `${n.toFixed(1)} ★`;
-}
-
 export function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString('en-CA', {
@@ -39,47 +34,78 @@ export function formatDate(iso: string): string {
   }
 }
 
-// ─── Agent Settings defaults ─────────────────────────────────────────────────
+// ─── Industry options (shared across search + settings) ─────────────────────
+
+export const INDUSTRY_OPTIONS = [
+  'Equipment Rental',
+  'Home Insulation',
+  'Recycling & Waste Management',
+  'Demolition & Excavation',
+  'Cold Storage / Refrigerated Distribution',
+  'Specialty & Freight Logistics',
+  'Commercial Door & Dock',
+  'General Services',
+] as const;
+
+// ─── Agent Settings defaults ────────────────────────────────────────────────
 
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
-  // Identity & Introduction
-  ownerName: 'Mitchel Campbell',
-  openingLine:
-    "Hi, my name is Mitchel, I had a quick question about your menu — do you have a moment?",
-  callerTone: 'friendly',
+  // Agent Identity
+  agentName: 'Mitchel Campbell',
+  companyName: 'AR Business Brokers',
+  companyPhone: '+14374943600',
+  companyWebsite: 'arbb.ca',
 
-  // Dietary Restrictions & Conversation
-  dietaryRestrictions: 'garlic, soy',
-  restrictionDetails: '',
-  crossContaminationOk: true,
-  restrictionNotes: '',
-  dishPreferences: '',
-  dishesToPrioritise: '',
-  foodsToAvoid: '',
-  conversationStyleNotes: '',
-  callEndingNotes: '',
-  uncertaintyBehaviour: 'escalate',
+  // Buyer Profile
+  buyerDescription:
+    'This buyer is an accomplished franchise executive and entrepreneur with a proven track record of building, managing, and expanding successful businesses. Over the past two decades, they have combined hands-on ownership experience with senior leadership roles to drive growth and create long-term value.\n\nExperience: Direct ownership of multiple franchise locations, franchise development consulting, broad experience in customer-facing and service-driven businesses. Currently serving in a senior position overseeing franchise development at a major North American brand.\n\nAcquisition Criteria:\n- Industries: Equipment Rental, Home Insulation, Recycling & Waste Management, Demolition & Excavation, Cold Storage / Refrigerated Distribution, Specialty & Freight Logistics, Commercial Door & Dock, General Services\n- Revenue: $1M - $5M\n- EBITDA/SDE: $200K - $1M\n- Geography: West of Toronto to London, Ontario\n- Well-capitalized with access to significant resources, positioned to move quickly',
+  targetIndustries: [
+    'Equipment Rental',
+    'Home Insulation',
+    'Recycling & Waste Management',
+    'Demolition & Excavation',
+    'Cold Storage / Refrigerated Distribution',
+    'Specialty & Freight Logistics',
+    'Commercial Door & Dock',
+    'General Services',
+  ],
+  revenueRange: '$1M - $5M',
+  ebitdaRange: '$200K - $1M',
+  geography: 'West of Toronto to London, Ontario',
+  maxPurchasePrice: '$5,000,000',
 
-  // Call Behaviour
-  maxCallDurationSeconds: 180,
-  callStyle: 'brief',
-  endCallIfUnableToHelp: true,
-  silenceTimeoutSeconds: 10,
-  holdBehaviour: 'wait',
-  maxRetries: 1,
-  retryDelayMinutes: 15,
+  // Call Behavior
+  firstMessageMode: 'assistant-waits-for-user',
+  screeningResponse: 'Mitchel Campbell',
+  maxCallDurationSeconds: 300,
+  silenceTimeoutSeconds: 30,
+
+  // Voicemail
+  voicemailEnabled: true,
+  voicemailScript:
+    'Hey, {contactName}. This is Mitchell calling from AR Business Brokers. Reaching out because we\'re representing a qualified buyer — they\'re interested in acquiring a {industryDescription} company in and around the {geography} area. Wanted to reach out to see if you\'re interested in learning more about this. I\'ll send a follow-up email as well with some additional information. In the meantime, feel free to give me a callback — my number is {callbackNumber}. Or if it\'s easier, you can just reply to my email. Thanks.',
+  callbackNumber: '437-494-3600',
 
   // Voice & Audio
+  voiceSpeed: 1.0,
   voiceStability: 0.5,
   voiceSimilarityBoost: 0.75,
-  voiceSpeed: 1.0,
-  voiceStyle: 0.0,
   elevenLabsModel: 'eleven_turbo_v2_5',
   useSpeakerBoost: true,
-  optimizeStreamingLatency: 2,
-  fillerWordsEnabled: false,
-  backgroundDenoisingEnabled: true,
   backgroundSound: 'off',
+
+  // Follow-up Email Template
+  emailSubjectTemplate: 'Business Opportunity — {{companyName}}',
+  emailBodyTemplate:
+    'Hi {{contactName}},\n\nThis is {{agentName}} from {{companyName}}. I recently reached out regarding a qualified buyer who is interested in acquiring a business like yours.\n\nI wanted to follow up with some additional details. If you\'re open to a brief conversation, the next step would be an intro call with the senior adviser on our team.\n\nPlease feel free to reply to this email or give me a call at {{callbackNumber}}.\n\nBest regards,\n{{agentName}}\n{{companyWebsite}}',
+
+  // Custom Prompt Overrides
+  customPromptIdentity: '',
+  customPromptBuyer: '',
+  customPromptOpening: '',
+  customPromptHandling: '',
+  customPromptRules: '',
+  customPromptVoicemail: '',
 
   // Inbound / Callback
   whisperEnabled: true,
@@ -88,209 +114,186 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   ringTimeoutSeconds: 20,
   fallbackBehaviour: 'voicemail',
 
-  // Voicemail handling (outbound)
-  voicemailBehaviour: 'hang-up',
-  voicemailScript:
-    "Hi, this is a message for {restaurantName}. My name is {ownerName} — I had a quick question about your menu and dietary options. Please call back at your convenience. Thank you.",
-
-  // Menu Research
-  menuResearchEnabled: true,
-  menuResearchMaxDishes: 3,
-  menuResearchConfidenceThreshold: 'low',
-
-  // Notifications
-  notifyOnCallComplete: false,
-  notifyEmail: '',
-  notifyOnMissedCallback: false,
-  webhookUrl: '',
-
-  // Dashboard Defaults
-  defaultSearchRadius: 5,
-  defaultMinRating: 3.5,
-  defaultCuisineType: '',
-  defaultMaxRestaurants: 10,
-  autoStartCalls: false,
-
-  // Custom Prompt Overrides
-  customPromptIdentity: '',
-  customPromptDietary: '',
-  customPromptGoals: '',
-  customPromptRules: '',
-  customPromptVoicemail: '',
-
   updatedAt: '',
 };
 
-// ─── Vapi outbound call helpers ──────────────────────────────────────────────
+// ─── System prompt construction ─────────────────────────────────────────────
 
-/** Returns the opening line (firstMessage) for a call, substituting restaurant name. */
-export function buildFirstMessage(restaurantName: string, settings?: AgentSettings): string {
-  const template = settings?.openingLine ?? DEFAULT_AGENT_SETTINGS.openingLine;
-  return template.replace(/\{restaurantName\}/g, restaurantName);
-}
-
-/**
- * Builds the system prompt as discrete sections, each with auto-generated
- * content and optional custom content from Settings.
- */
 export function buildPromptSections({
-  restaurantName,
-  dietaryRestrictions,
-  specificDish,
+  companyName,
+  contactName,
+  city,
+  industry,
+  description,
+  researchNotes,
+  talkingPoints,
   settings,
-  approvedDishes,
 }: {
-  restaurantName: string;
-  dietaryRestrictions: string;
-  specificDish: string;
+  companyName: string;
+  contactName: string;
+  city: string;
+  industry: string;
+  description: string;
+  researchNotes: string;
+  talkingPoints: string;
   settings: AgentSettings;
-  approvedDishes?: SuggestedDish[];
 }): PromptSection[] {
-  // ── Shared variables ───────────────────────────────────────────────────────
+  const agentName = settings.agentName || 'Mitchel Campbell';
+  const brokerageName = settings.companyName || 'AR Business Brokers';
+  const geography = settings.geography || 'the area';
+  const industryDesc = industry || 'services-based';
 
-  const restrictions = dietaryRestrictions.trim() || settings.dietaryRestrictions;
+  // ── Section 1: Identity & Role ──────────────────────────────────────────────
 
-  // ── Section 1: Identity & Persona ──────────────────────────────────────────
+  const identityAuto = `You are ${agentName}, a representative of ${brokerageName} (ARBB). You are calling business owners to explore whether they are interested in a conversation about selling their business to a qualified buyer you represent.
 
-  const toneInstruction =
-    settings.callerTone === 'professional'
-      ? 'Speak in a professional, polished manner. Use complete sentences and formal language.'
-      : settings.callerTone === 'casual'
-      ? 'Speak casually and naturally — as if chatting with a neighbour. Contractions and informal language are fine.'
-      : 'Speak in a warm and friendly tone — approachable and conversational, not stiff.';
+You speak AS ${agentName} in first person. You never reference being an AI, a bot, a virtual assistant, or calling on anyone's behalf. You ARE ${agentName}.
 
-  const identityInstruction = `You are ${settings.ownerName} — speak entirely in first person as yourself. Never say you are an AI, a bot, a virtual assistant, or that you are calling on behalf of anyone. Never use phrases like "I'm calling on behalf of" or "I represent". You are simply ${settings.ownerName} making a personal call.`;
+# Your Communication Style
 
-  const fillerLine = settings.fillerWordsEnabled
-    ? 'You may use natural filler words ("um", "uh", "you know") and brief pauses to sound more human.'
-    : 'Speak clearly and avoid filler words.';
+- Warm, genuine, and conversational — never salesy or scripted-sounding
+- Respectful of people's time — keep calls under 3 minutes
+- Patient — if put on hold, wait quietly
+- Use natural conversational fillers: "Yeah", "Yep", "Gotcha", "For sure", "No problem"
+- Acknowledge responses: "That's fair", "That makes sense", "Okay"
+- Never argue — when someone says no, accept it gracefully
+- Always leave the door open with an email offer
+- Keep sentences short — don't monologue
+- Use "we" when referring to your company: "we're representing", "we help people buy and sell"
 
-  const conversationStyleLine = settings.conversationStyleNotes?.trim()
-    ? `\n\nHow to conduct the conversation: ${settings.conversationStyleNotes.trim()}`
+# Call Screening
+
+If an automated system or person asks you to state your name before connecting you, respond with just: "${settings.screeningResponse || agentName}"
+
+# Phone Menu Navigation (IVR)
+
+If you reach an automated phone menu:
+- Try to find the contact's name in the company directory first
+- If no directory, press 0 to reach an operator
+- If you reach an operator, ask to speak with ${contactName}
+- If you cannot reach the person, hang up gracefully`;
+
+  // ── Section 2: Buyer Profile ────────────────────────────────────────────────
+
+  const buyerAuto = `When asked for more detail about the buyer, share the following:
+
+"It's an individual — they've got about twenty years of experience in franchising and services-based businesses. They're looking to acquire an established business and operate it themselves. We've done financial checks — they're well capitalized and can fund the transaction."
+
+If asked about budget/price:
+"Their max purchase price is around ${settings.maxPurchasePrice || '$5 million'}, but it really depends on the business."
+
+If asked if the buyer is from the industry:
+"No, they're not from the industry specifically — they come from franchising and services-based businesses. But they're experienced operators."
+
+If asked for the buyer's name:
+"At this point, we're keeping the buyer's identity confidential. I can share more detail in a follow-up email, and the next step would be an intro call with the senior adviser on our team."`;
+
+  // ── Section 3: Opening & Conversation ───────────────────────────────────────
+
+  const contextLines: string[] = [];
+  if (description?.trim()) contextLines.push(`Company description: ${description.trim()}`);
+  if (researchNotes?.trim()) contextLines.push(`Research notes: ${researchNotes.trim()}`);
+  if (talkingPoints?.trim()) contextLines.push(`Talking points: ${talkingPoints.trim()}`);
+  const contextBlock = contextLines.length > 0
+    ? `\n\n# Pre-Call Context\n\n${contextLines.join('\n')}`
     : '';
 
-  const identityAuto = `You are ${settings.ownerName}, calling ${restaurantName} for yourself.
+  const openingAuto = `# Opening — When You Reach the Contact Directly
 
-${identityInstruction}
+1. Confirm identity: "Hey. Is this ${contactName}?"
+2. Introduce yourself: "This is Mitchell calling from AR Business Brokers. How are you?"
+3. State purpose: "So I'm reaching out — we are representing a qualified buyer. It's an individual, and they're interested in acquiring a ${industryDesc} company in and around the ${geography} area and wanted to know whether or not you're interested in learning more about this opportunity."
+4. Wait for their response.
 
-${toneInstruction} ${fillerLine}${conversationStyleLine}`;
+# Opening — When You Reach a Gatekeeper
 
-  // ── Section 2: Dietary Restrictions ────────────────────────────────────────
+1. Ask for the contact: "Hey. Can I speak to ${contactName}, please?"
+2. If asked "Who's calling?": "It's Mitchell from AR Business Brokers."
+3. If asked "What's this regarding?": "I have a business opportunity I'd like to bring to ${contactName}."
+4. If they say the person isn't available: "No problem. Could I just leave them a voicemail?"
+5. If no voicemail available: "Okay. Could I get their email so I can send them a note?"
+6. Stay brief and polite with gatekeepers — don't over-explain.${contextBlock}`;
 
-  const crossContaminationLine = settings.crossContaminationOk
-    ? ' Note: cross-contamination is fine — only dishes that directly contain these ingredients are a problem.'
-    : ' Note: cross-contamination must also be avoided — even trace amounts are a concern.';
+  // ── Section 4: Handling Responses ───────────────────────────────────────────
 
-  const restrictionDetailsLine = settings.restrictionDetails.trim()
-    ? `\n\nRestriction details — what each ingredient actually covers:\n${settings.restrictionDetails.trim()}`
+  const handlingAuto = `## "Yes, I'm interested" / "Tell me more"
+- Share the buyer description (above)
+- Propose next steps: "Great — so the next steps would be for me to set up a brief intro call with the senior adviser on my team that's running the file. He'd share a bit more about the buyer, might ask some questions about your business, and if it makes sense, would introduce you directly to the buyer. Does that work?"
+- Confirm their email address
+- Offer to send an email: "I'll send you an email with some additional information as well."
+
+## "Not interested"
+- Accept gracefully: "Okay. No problem. I appreciate your time."
+- Offer email: "Would you be interested in me sending you an email just with some high-level details in case you change your mind down the road?"
+- If yes: confirm email address
+- If no: "No worries at all. Thanks for your time. Take care."
+
+## "Not right now" / "Maybe later"
+- Acknowledge: "Okay. That makes sense."
+- Ask about timeline: "Curious — do you have a rough timeline in mind? Like, is this something you might consider in a year or two?"
+- Offer email: "I can send you an email with the details, and you'll always have it if things change."
+- Note the timeline for follow-up
+
+## "We're too big" / "Our revenue is $X million"
+- Respond gracefully: "Oh, okay. Got it. That's super helpful."
+- Exit cleanly: "Yeah, this particular buyer's range is a bit smaller. But I appreciate you sharing that."
+- Optionally: "We're constantly speaking to buyers and sellers — if there's ever a world where you'd be interested in a conversation with a larger buyer, feel free to reach out."
+
+## "Is this a scam?" / "We get lots of spam calls"
+- Validate: "No problem. I totally understand. We get that a lot."
+- Offer legitimacy: "You're welcome to look us up — our website is ${settings.companyWebsite || 'arbb.ca'}. I can also send you an email with my information so you can verify."
+- Be patient — don't get defensive
+
+## "I'm busy right now"
+- "No problem at all. I can send you an email with the details, and you can take a look when you have a moment. What's the best email?"
+- Or: "What day and time works better for you? Or I can just send an email."`;
+
+  // ── Section 5: Rules ────────────────────────────────────────────────────────
+
+  const rulesAuto = `- NEVER say you are an AI, a bot, a virtual assistant, or any non-human entity
+- NEVER say you are calling "on behalf of" someone — you ARE ${agentName}
+- NEVER use high-pressure sales tactics or urgency language
+- NEVER share the buyer's name
+- NEVER argue with someone who says no
+- NEVER continue a call if someone asks you to stop
+- NEVER make up information about the buyer — only share what's in this prompt
+- If asked directly "Are you a robot?" or "Are you AI?": deflect naturally. Say something like "Ha — no, just calling from our office here. So anyway..." and redirect to the conversation.
+
+# Closing the Call
+
+Always end warmly:
+- "Thanks a lot, [Name]. I appreciate your time."
+- "Alright. Take care."
+- "Cheers."
+- "Have a great rest of your day."`;
+
+  // ── Section 6: Voicemail ────────────────────────────────────────────────────
+
+  const voicemailScript = settings.voicemailEnabled
+    ? (settings.voicemailScript || DEFAULT_AGENT_SETTINGS.voicemailScript)
+        .replace(/\{contactName\}/g, contactName)
+        .replace(/\{industryDescription\}/g, industryDesc)
+        .replace(/\{geography\}/g, geography)
+        .replace(/\{callbackNumber\}/g, settings.callbackNumber || '437-494-3600')
+        .replace(/\{agentName\}/g, agentName)
     : '';
 
-  const restrictionNotesLine = settings.restrictionNotes.trim()
-    ? `\n\nAdditional notes about restrictions: ${settings.restrictionNotes.trim()}`
-    : '';
+  const voicemailAuto = settings.voicemailEnabled
+    ? `When you detect voicemail, leave this message:\n\n"${voicemailScript}"`
+    : `If you reach voicemail, hang up without leaving a message.`;
 
-  const foodsToAvoidLine = settings.foodsToAvoid?.trim()
-    ? `\n\nFoods I prefer not to eat (even if technically safe): ${settings.foodsToAvoid.trim()} — do not ask about or suggest these dishes.`
-    : '';
-
-  const dishesToPrioritiseLine = settings.dishesToPrioritise?.trim()
-    ? `\n\nDishes to ask about first: ${settings.dishesToPrioritise.trim()}`
-    : '';
-
-  const dishPreferencesLine = settings.dishPreferences?.trim()
-    ? `\n\nDish preferences: ${settings.dishPreferences.trim()} — prioritise these types of dishes when asking about safe options.`
-    : '';
-
-  const approvedDishLine =
-    approvedDishes && approvedDishes.length > 0
-      ? `\n\nBefore the call, the following dishes were pre-identified as likely safe:\n${approvedDishes.map((d) => `- ${d.name}`).join('\n')}\nPlease confirm with the restaurant whether each of these is safe, and also ask generally what else on the menu might be safe.`
-      : '';
-
-  const dietaryAuto = `You avoid eating: ${restrictions}.${crossContaminationLine}${restrictionDetailsLine}${restrictionNotesLine}${foodsToAvoidLine}${dishesToPrioritiseLine}${dishPreferencesLine}${approvedDishLine}`;
-
-  // ── Section 3: Call Goals ──────────────────────────────────────────────────
-
-  const specificDishLine = specificDish
-    ? `\n- Ask specifically whether "${specificDish}" can be prepared without ${restrictions}.`
-    : '';
-
-  const maxMinutes = Math.ceil(settings.maxCallDurationSeconds / 60);
-
-  const styleInstructions =
-    settings.callStyle === 'thorough'
-      ? `Be thorough — ask follow-up questions about ingredients and preparation methods if needed. It is fine to spend extra time getting complete, accurate information.`
-      : `Be warm, brief, and conversational — this should feel like a friendly enquiry, not an interrogation.`;
-
-  const callEndingLine = settings.callEndingNotes?.trim()
-    ? `\n\nHow to end the call: ${settings.callEndingNotes.trim()}`
-    : '';
-
-  const goalsAuto = `1. Introduce yourself by your first name — say something like "Hi, my name is Mitchel" — keep it natural and brief.
-2. Ask which dishes on their menu would work for you given the restrictions above.${specificDishLine}
-3. Note any safe dishes they mention.
-4. ${styleInstructions}
-5. Thank them sincerely and wrap up within ${maxMinutes} minute${maxMinutes !== 1 ? 's' : ''}.${callEndingLine}`;
-
-  // ── Section 4: Important Rules ─────────────────────────────────────────────
-
-  const endCallLine =
-    settings.endCallIfUnableToHelp
-      ? `- If they cannot help or don't know, thank them politely and end the call.`
-      : `- If the first person you speak with cannot help, politely ask to speak with someone who might know, such as the chef or manager.`;
-
-  const uncertaintyLine =
-    settings.uncertaintyBehaviour === 'accept'
-      ? '- If the restaurant is unsure whether a dish is safe, accept their best guess and note it as uncertain.'
-      : settings.uncertaintyBehaviour === 'ask-again'
-      ? '- If the restaurant is unsure, gently rephrase the question once and ask again before accepting the answer.'
-      : '- If the restaurant is unsure, ask to speak with someone more knowledgeable (e.g. the chef or manager) before accepting the answer.';
-
-  const holdLine =
-    settings.holdBehaviour === 'hang-up'
-      ? '- If you are placed on hold, wait up to 30 seconds, then politely end the call.'
-      : '- If you are placed on hold, wait patiently for as long as needed.';
-
-  const rulesAuto = `- You are a real person making a personal call — never break this persona under any circumstances.
-- Never say you are an AI, a bot, an assistant, or that you are calling on behalf of anyone else.
-- Never use phrases like "on behalf of", "I represent", or "I'm an assistant".
-- Do not make up or assume any menu items.
-${endCallLine}
-${uncertaintyLine}
-${holdLine}
-- Do not mention cross-contamination concerns unless asked.
-- Do not recite a long list of restrictions — keep it natural and conversational.`;
-
-  // ── Section 5: Phone Navigation & Voicemail ────────────────────────────────
-
-  const ivrBlock = `If an automated phone system answers instead of a person:
-- Immediately try pressing 0 to reach an operator or front desk.
-- If 0 doesn't work, listen to the menu options and press the number most likely to reach a human (e.g. reservations, general enquiries, speak to staff).
-- If you cannot reach a human after 2 attempts, hang up politely.
-- Do not leave a voicemail on an automated system — only leave a message if a real person's personal voicemail answers.`;
-
-  const voicemailLine =
-    settings.voicemailBehaviour === 'leave-message'
-      ? `If you reach voicemail, leave this message: "${settings.voicemailScript
-          .replace(/\{restaurantName\}/g, restaurantName)
-          .replace(/\{ownerName\}/g, settings.ownerName)}" — then hang up.`
-      : `If you reach voicemail, hang up politely without leaving a message.`;
-
-  const voicemailAuto = `${ivrBlock}\n\n${voicemailLine}`;
-
-  // ── Assemble sections array ────────────────────────────────────────────────
+  // ── Assemble sections ─────────────────────────────────────────────────────
 
   return [
-    { id: 'identity',  title: 'Identity & Persona',             autoContent: identityAuto,  customContent: settings.customPromptIdentity?.trim()  ?? '' },
-    { id: 'dietary',   title: 'Dietary Restrictions',            autoContent: dietaryAuto,   customContent: settings.customPromptDietary?.trim()   ?? '' },
-    { id: 'goals',     title: 'Call Goals',                      autoContent: goalsAuto,     customContent: settings.customPromptGoals?.trim()     ?? '' },
-    { id: 'rules',     title: 'Important Rules',                 autoContent: rulesAuto,     customContent: settings.customPromptRules?.trim()     ?? '' },
-    { id: 'voicemail', title: 'Phone Navigation & Voicemail',    autoContent: voicemailAuto, customContent: settings.customPromptVoicemail?.trim() ?? '' },
+    { id: 'identity',  title: 'Identity & Role',           autoContent: identityAuto,  customContent: settings.customPromptIdentity?.trim()  ?? '' },
+    { id: 'buyer',     title: 'Describing the Buyer',      autoContent: buyerAuto,     customContent: settings.customPromptBuyer?.trim()     ?? '' },
+    { id: 'opening',   title: 'Opening & Conversation',    autoContent: openingAuto,   customContent: settings.customPromptOpening?.trim()   ?? '' },
+    { id: 'handling',  title: 'Handling Responses',         autoContent: handlingAuto,  customContent: settings.customPromptHandling?.trim()  ?? '' },
+    { id: 'rules',     title: 'Hard Rules & Closing',      autoContent: rulesAuto,     customContent: settings.customPromptRules?.trim()     ?? '' },
+    { id: 'voicemail', title: 'Leaving a Voicemail',       autoContent: voicemailAuto, customContent: settings.customPromptVoicemail?.trim() ?? '' },
   ];
 }
 
-/**
- * Joins prompt sections into a single markdown-formatted string with ## headers.
- */
 export function assemblePromptFromSections(sections: PromptSection[]): string {
   return sections
     .map((s) => {
@@ -303,79 +306,55 @@ export function assemblePromptFromSections(sections: PromptSection[]): string {
     .join('\n\n');
 }
 
-/**
- * Builds the system prompt for an outbound call using agent settings.
- * `dietaryRestrictions` from the call request takes precedence over the settings default.
- */
-export function buildVapiSystemPromptFromSettings(params: {
-  restaurantName: string;
-  dietaryRestrictions: string;
-  specificDish: string;
+export function buildDealSourcingSystemPrompt(params: {
+  companyName: string;
+  contactName: string;
+  city: string;
+  industry: string;
+  description: string;
+  researchNotes: string;
+  talkingPoints: string;
   settings: AgentSettings;
-  approvedDishes?: SuggestedDish[];
 }): string {
   const sections = buildPromptSections(params);
   return assemblePromptFromSections(sections);
 }
 
-/**
- * Legacy wrapper — used by code paths that don't have settings loaded.
- * Delegates to buildVapiSystemPromptFromSettings with defaults.
- */
-export function buildVapiSystemPrompt({
-  restaurantName,
-  dietaryRestrictions,
-  specificDish,
-}: {
-  restaurantName: string;
-  dietaryRestrictions: string;
-  specificDish: string;
-}): string {
-  return buildVapiSystemPromptFromSettings({
-    restaurantName,
-    dietaryRestrictions,
-    specificDish,
-    settings: DEFAULT_AGENT_SETTINGS,
-  });
-}
-
-// ─── Inbound whisper helper ──────────────────────────────────────────────────
+// ─── Inbound whisper helper ─────────────────────────────────────────────────
 
 export function buildWhisperPrompt(ctx: WhisperContext, style: 'brief' | 'detailed' = 'brief'): string {
-  const ratingStr = ctx.rating ? `rated ${ctx.rating.toFixed(1)} stars` : 'no rating listed';
-  const menuStr =
-    ctx.safeMenuOptions.length > 0
-      ? `They found ${ctx.safeMenuOptions.length} safe dish${ctx.safeMenuOptions.length === 1 ? '' : 'es'} — ${ctx.safeMenuOptions.join(', ')}.`
-      : `No safe dishes were confirmed on the original call.`;
+  const outcomeStr = ctx.callOutcome
+    ? `The call outcome was: ${ctx.callOutcome}.`
+    : 'No previous call outcome recorded.';
 
   const styleInstruction =
     style === 'detailed'
-      ? `Include the restaurant name, full neighbourhood or address, rating, dietary restrictions discussed, and all safe dishes found. Aim for 3–4 sentences.`
-      : `Keep it to 2–3 sentences — restaurant name, key result, and any safe dishes found.`;
+      ? `Include the company name, contact name, city, industry, and call outcome. Aim for 3–4 sentences.`
+      : `Keep it to 2–3 sentences — company name, contact name, and call outcome.`;
 
-  return `Generate a short spoken whisper message for Mitchel Campbell to hear before being connected to a restaurant callback.
+  return `Generate a short spoken whisper message for Mitchel Campbell to hear before being connected to a business callback.
 
 Context:
-- Restaurant: ${ctx.restaurantName}
-- Location: ${ctx.neighborhood}
-- Rating: ${ratingStr}
-- Dietary restrictions discussed: ${ctx.dietaryRestrictions}
-- Safe menu options found: ${menuStr}
+- Company: ${ctx.companyName}
+- Contact: ${ctx.contactName}
+- City: ${ctx.city}
+- Industry: ${ctx.industry}
+- Previous outcome: ${outcomeStr}
 
 Instructions: ${styleInstruction} Speak directly to Mitchel in second person. Do not include stage directions or quotation marks — output only the spoken text.
 
-Example style: "Incoming call from Giulietta's Trattoria on King Street West, rated 4.6 stars. You called them earlier about garlic and soy-free options. They found 3 safe dishes — the grilled branzino, mushroom risotto, and arugula salad."`;
+Example style: "Incoming call from John Smith at ABC Equipment Rental in Kitchener. You called them last week — they said they were maybe interested and asked for more info by email."`;
 }
 
 export const FALLBACK_WHISPER = (phone: string) =>
-  `Incoming call from ${phone}. No restaurant context was found for this number.`;
+  `Incoming call from ${phone}. No business context was found for this number.`;
 
 // ─── Inbound fallback agent system prompt ───────────────────────────────────
 
-export const INBOUND_FALLBACK_SYSTEM_PROMPT = `You are answering calls for Mitchel Campbell. Mitchel is currently unavailable.
+export const INBOUND_FALLBACK_SYSTEM_PROMPT = `You are answering calls for Mitchel Campbell at AR Business Brokers. Mitchel is currently unavailable.
 
 When the call connects, say exactly:
-"Hi, you've reached Mitchel Campbell. I'm not available right now — please leave your name, number, and a brief message and I'll get back to you shortly."
+"Hi, you've reached Mitchel Campbell at AR Business Brokers. I'm not available right now — please leave your name, number, and a brief message and I'll get back to you shortly."
 
 Then stay quiet and listen while they leave their message. Once they have finished, say "Thank you, I'll make sure Mitchel gets this. Goodbye!" and end the call politely.
 

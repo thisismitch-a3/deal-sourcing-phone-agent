@@ -7,7 +7,6 @@ interface TextSearchResult {
   place_id: string;
   name: string;
   formatted_address: string;
-  rating?: number;
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
     url.searchParams.set('query', q);
-    url.searchParams.set('type', 'restaurant');
     url.searchParams.set('key', mapsKey);
 
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(5000) });
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest): Promise<Response> {
         placeId: r.place_id,
         name: r.name,
         address: r.formatted_address,
-        rating: r.rating ?? null,
       }));
 
     return Response.json({ places } satisfies PlacesAutocompleteResponse);

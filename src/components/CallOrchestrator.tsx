@@ -7,136 +7,152 @@ import {
   useEffect,
   useCallback,
 } from 'react';
-import { upsertRestaurant } from '@/lib/storage';
+import { upsertBusiness } from '@/lib/storage';
 import { delay } from '@/lib/utils';
 import type {
-  Restaurant,
-  SearchSession,
+  Business,
   AgentSettings,
   CallStartResponse,
   CallStatusResponse,
-  SummariseResponse,
-  MenuResearchResponse,
+  AnalyseCallResponse,
+  CallOutcome,
+  CallStatus,
 } from '@/lib/types';
 
 export interface CallOrchestratorHandle {
   startQueue: () => void;
-  startResearch: () => void;
 }
 
 interface Props {
-  restaurants: Restaurant[];
-  searchSession: SearchSession | null;
+  businesses: Business[];
   agentSettings: AgentSettings | null;
-  onUpdate: (updated: Restaurant) => void;
+  onUpdate: (updated: Business) => void;
 }
 
+const OUTCOME_TO_STATUS: Record<CallOutcome, CallStatus> = {
+  'interested': 'called-interested',
+  'maybe': 'called-maybe',
+  'not-interested': 'called-not-interested',
+  'wrong-contact': 'called-wrong-contact',
+  'send-info': 'called-send-info',
+  'left-voicemail': 'called-left-voicemail',
+  'no-answer': 'called-no-answer',
+};
+
 const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
-  function CallOrchestrator({ restaurants, searchSession, agentSettings, onUpdate }, ref) {
-    const restaurantsRef = useRef(restaurants);
+  function CallOrchestrator({ businesses, onUpdate }, ref) {
+    const businessesRef = useRef(businesses);
     const pollingRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
     const failCountRef = useRef<Map<string, number>>(new Map());
     const isProcessingRef = useRef(false);
-    const isResearchingRef = useRef(false);
 
-    // Keep ref in sync so callbacks always see latest list
     useEffect(() => {
-      restaurantsRef.current = restaurants;
-    }, [restaurants]);
+      businessesRef.current = businesses;
+    }, [businesses]);
 
-    // ── Polling ──────────────────────────────────────────────────────────────
-
-    const stopPolling = useCallback((restaurantId: string) => {
-      const interval = pollingRef.current.get(restaurantId);
+    const stopPolling = useCallback((businessId: string) => {
+      const interval = pollingRef.current.get(businessId);
       if (interval) {
         clearInterval(interval);
-        pollingRef.current.delete(restaurantId);
+        pollingRef.current.delete(businessId);
       }
     }, []);
 
     const handleCallComplete = useCallback(
-      async (restaurant: Restaurant, transcript: string | null, recordingUrl: string | null) => {
-        stopPolling(restaurant.id);
-        failCountRef.current.delete(restaurant.id);
+      async (business: Business, transcript: string | null, recordingUrl: string | null, statusFromVapi: CallStatus) => {
+        stopPolling(business.id);
+        failCountRef.current.delete(business.id);
 
-        let safeMenuOptions: string[] = [];
+        let finalStatus: CallStatus = statusFromVapi;
+        let notes = '';
+        let followUpDate: string | null = null;
+        let emailSent = business.emailSent;
 
-        // Summarise transcript via Claude
-        if (transcript && searchSession) {
+        // Analyse transcript via Claude to determine outcome
+        if (transcript && !['called-left-voicemail', 'called-no-answer'].includes(statusFromVapi)) {
           try {
             const res = await fetch('/api/call/summarise', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                restaurantId: restaurant.id,
-                restaurantName: restaurant.name,
-                phone: restaurant.phone,
+                businessId: business.id,
+                companyName: business.companyName,
+                contactName: business.contactName,
+                phone: business.phone,
                 transcript,
-                dietaryRestrictions: searchSession.dietaryRestrictions,
               }),
             });
-            const data: SummariseResponse = await res.json();
-            safeMenuOptions = data.safeMenuOptions ?? [];
+            const data: AnalyseCallResponse = await res.json();
+            finalStatus = OUTCOME_TO_STATUS[data.outcome] ?? 'called-maybe';
+            notes = data.notes || '';
+            followUpDate = data.followUpDate || null;
+            if (data.emailRequested) emailSent = false; // flag that email needs to be sent
           } catch {
-            // Non-fatal — show empty options
+            // Non-fatal — keep the Vapi-determined status
           }
         }
 
-        const updated: Restaurant = {
-          ...restaurant,
-          callStatus: 'complete',
+        const historyEntry = {
+          callId: business.callId || '',
+          timestamp: new Date().toISOString(),
+          outcome: finalStatus,
           transcript,
           recordingUrl,
-          safeMenuOptions,
+          duration: null,
+          notes,
         };
 
-        upsertRestaurant(updated);
+        const updated: Business = {
+          ...business,
+          callStatus: finalStatus,
+          transcript,
+          recordingUrl,
+          followUpDate: followUpDate || business.followUpDate,
+          emailSent,
+          callHistory: [...business.callHistory, historyEntry],
+        };
+
+        upsertBusiness(updated);
         onUpdate(updated);
       },
-      [searchSession, onUpdate, stopPolling]
+      [onUpdate, stopPolling]
     );
 
     const startPolling = useCallback(
-      (restaurant: Restaurant) => {
-        if (!restaurant.callId) return;
-        if (pollingRef.current.has(restaurant.id)) return; // already polling
+      (business: Business) => {
+        if (!business.callId) return;
+        if (pollingRef.current.has(business.id)) return;
 
         const interval = setInterval(async () => {
           try {
-            const res = await fetch(`/api/call/status?callId=${restaurant.callId}`);
+            const res = await fetch(`/api/call/status?callId=${business.callId}`);
             const data: CallStatusResponse = await res.json();
 
-            if (data.status === 'complete') {
-              await handleCallComplete(restaurant, data.transcript ?? null, data.recordingUrl ?? null);
-            } else if (data.status === 'failed') {
-              stopPolling(restaurant.id);
-              const updated: Restaurant = { ...restaurant, callStatus: 'failed', callError: data.error ?? 'Call ended with a failed status.' };
-              upsertRestaurant(updated);
-              onUpdate(updated);
+            if (data.status && data.status !== 'calling') {
+              await handleCallComplete(business, data.transcript ?? null, data.recordingUrl ?? null, data.status);
             }
-            // 'calling' — keep polling
-          } catch (err) {
-            const fails = (failCountRef.current.get(restaurant.id) ?? 0) + 1;
-            failCountRef.current.set(restaurant.id, fails);
+          } catch {
+            const fails = (failCountRef.current.get(business.id) ?? 0) + 1;
+            failCountRef.current.set(business.id, fails);
             if (fails >= 5) {
-              stopPolling(restaurant.id);
-              const updated: Restaurant = { ...restaurant, callStatus: 'failed', callError: 'Lost contact with Vapi after 5 retries.' };
-              upsertRestaurant(updated);
+              stopPolling(business.id);
+              const updated: Business = { ...business, callStatus: 'failed', callError: 'Lost contact with Vapi after 5 retries.' };
+              upsertBusiness(updated);
               onUpdate(updated);
             }
           }
         }, 5000);
 
-        pollingRef.current.set(restaurant.id, interval);
+        pollingRef.current.set(business.id, interval);
       },
       [handleCallComplete, onUpdate, stopPolling]
     );
 
-    // On mount, resume polling for any restaurants that were mid-call
+    // Resume polling for any businesses that were mid-call on mount
     useEffect(() => {
-      restaurantsRef.current
-        .filter((r) => r.callStatus === 'calling' && r.callId)
-        .forEach((r) => startPolling(r));
+      businessesRef.current
+        .filter((b) => b.callStatus === 'calling' && b.callId)
+        .forEach((b) => startPolling(b));
 
       return () => {
         pollingRef.current.forEach((interval) => clearInterval(interval));
@@ -145,96 +161,22 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ── Research ──────────────────────────────────────────────────────────────
-
-    const startResearch = useCallback(async () => {
-      if (isResearchingRef.current) return;
-      if (agentSettings?.menuResearchEnabled === false) return;
-
-      const toResearch = restaurantsRef.current.filter(
-        (r) => r.callStatus === 'pending'
-      );
-
-      if (toResearch.length === 0) return;
-
-      isResearchingRef.current = true;
-
-      try {
-        await Promise.allSettled(
-          toResearch.map(async (restaurant) => {
-            // Mark as researching
-            const researching: Restaurant = { ...restaurant, callStatus: 'researching' };
-            upsertRestaurant(researching);
-            onUpdate(researching);
-
-            try {
-              const res = await fetch('/api/menu/research', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  restaurantId: restaurant.id,
-                  restaurantName: restaurant.name,
-                  address: restaurant.address,
-                  placeId: restaurant.placeId,
-                  dietaryRestrictions: searchSession?.dietaryRestrictions ?? '',
-                  specificDish: searchSession?.specificDish ?? '',
-                }),
-              });
-              const data: MenuResearchResponse = await res.json();
-
-              if (data.status === 'complete' && data.suggestedDishes.length > 0) {
-                const updated: Restaurant = {
-                  ...restaurant,
-                  callStatus: 'awaiting-approval',
-                  suggestedDishes: data.suggestedDishes,
-                };
-                upsertRestaurant(updated);
-                onUpdate(updated);
-              } else {
-                const updated: Restaurant = {
-                  ...restaurant,
-                  callStatus: 'no-menu',
-                  suggestedDishes: [],
-                };
-                upsertRestaurant(updated);
-                onUpdate(updated);
-              }
-            } catch {
-              const updated: Restaurant = {
-                ...restaurant,
-                callStatus: 'no-menu',
-                suggestedDishes: [],
-              };
-              upsertRestaurant(updated);
-              onUpdate(updated);
-            }
-          })
-        );
-      } finally {
-        isResearchingRef.current = false;
-      }
-    }, [agentSettings, searchSession, onUpdate]);
-
-    // ── Queue ─────────────────────────────────────────────────────────────────
-
     const startQueue = useCallback(async () => {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true;
 
       try {
-        // Accept 'approved' (research done) or 'pending' (research disabled / no-menu → call anyway)
-        const pending = restaurantsRef.current.filter(
-          (r) => (r.callStatus === 'approved' || r.callStatus === 'pending') && r.phone
+        const pending = businessesRef.current.filter(
+          (b) => (b.callStatus === 'approved' || b.callStatus === 'researched') && b.phone
         );
 
         for (let i = 0; i < pending.length; i++) {
-          const restaurant = pending[i];
+          const business = pending[i];
 
-          if (i > 0) await delay(5000); // rate-limit between calls
+          if (i > 0) await delay(5000);
 
-          // Mark as calling
-          const callingState: Restaurant = { ...restaurant, callStatus: 'calling' };
-          upsertRestaurant(callingState);
+          const callingState: Business = { ...business, callStatus: 'calling' };
+          upsertBusiness(callingState);
           onUpdate(callingState);
 
           try {
@@ -242,45 +184,43 @@ const CallOrchestrator = forwardRef<CallOrchestratorHandle, Props>(
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                restaurantId: restaurant.id,
-                restaurantName: restaurant.name,
-                phone: restaurant.phone,
-                address: restaurant.address,
-                rating: restaurant.rating,
-                dietaryRestrictions: searchSession?.dietaryRestrictions ?? 'No garlic, no soy — cross-contamination is fine',
-                specificDish: searchSession?.specificDish ?? '',
-                approvedDishes: restaurant.suggestedDishes.filter((d) => d.approved),
+                businessId: business.id,
+                companyName: business.companyName,
+                contactName: business.contactName,
+                phone: business.phone,
+                city: business.city,
+                industry: business.industry,
+                description: business.description,
+                researchNotes: business.researchNotes,
+                talkingPoints: business.talkingPoints,
               }),
             });
 
             const data: CallStartResponse = await res.json();
 
             if (data.callId) {
-              const withCallId: Restaurant = {
-                ...callingState,
-                callId: data.callId,
-              };
-              upsertRestaurant(withCallId);
+              const withCallId: Business = { ...callingState, callId: data.callId };
+              upsertBusiness(withCallId);
               onUpdate(withCallId);
               startPolling(withCallId);
             } else {
               throw new Error(data.error ?? 'No call ID returned');
             }
           } catch (err) {
-            console.error(`[CallOrchestrator] Failed to start call for ${restaurant.name}:`, err);
-            const failed: Restaurant = { ...restaurant, callStatus: 'failed', callError: err instanceof Error ? err.message : 'Failed to start call.' };
-            upsertRestaurant(failed);
+            console.error(`[CallOrchestrator] Failed to start call for ${business.companyName}:`, err);
+            const failed: Business = { ...business, callStatus: 'failed', callError: err instanceof Error ? err.message : 'Failed to start call.' };
+            upsertBusiness(failed);
             onUpdate(failed);
           }
         }
       } finally {
         isProcessingRef.current = false;
       }
-    }, [searchSession, onUpdate, startPolling]);
+    }, [onUpdate, startPolling]);
 
-    useImperativeHandle(ref, () => ({ startQueue, startResearch }), [startQueue, startResearch]);
+    useImperativeHandle(ref, () => ({ startQueue }), [startQueue]);
 
-    return null; // invisible — logic only
+    return null;
   }
 );
 

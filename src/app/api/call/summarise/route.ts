@@ -1,24 +1,28 @@
 import type { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { updateWhisperMenuOptions } from '@/lib/kv';
-import type { SummariseRequest, SummariseResponse } from '@/lib/types';
+import { updateWhisperOutcome } from '@/lib/kv';
+import type { AnalyseCallRequest, AnalyseCallResponse, CallOutcome } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
+const VALID_OUTCOMES: Set<string> = new Set([
+  'interested', 'maybe', 'not-interested', 'wrong-contact', 'send-info', 'left-voicemail', 'no-answer',
+]);
+
 export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const body: SummariseRequest = await request.json();
+    const body: AnalyseCallRequest = await request.json();
 
     if (!body.transcript) {
       return Response.json(
-        { safeMenuOptions: [], error: 'No transcript provided.' } satisfies SummariseResponse
+        { outcome: 'no-answer' as CallOutcome, notes: '', followUpDate: null, emailRequested: false, error: 'No transcript provided.' } satisfies AnalyseCallResponse
       );
     }
 
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicKey) {
       return Response.json(
-        { safeMenuOptions: [], error: 'ANTHROPIC_API_KEY is not configured.' } satisfies SummariseResponse,
+        { outcome: 'no-answer' as CallOutcome, notes: '', followUpDate: null, emailRequested: false, error: 'ANTHROPIC_API_KEY is not configured.' } satisfies AnalyseCallResponse,
         { status: 500 }
       );
     }
@@ -31,51 +35,71 @@ export async function POST(request: NextRequest): Promise<Response> {
       messages: [
         {
           role: 'user',
-          content: `You are extracting safe menu options from a restaurant phone call transcript.
+          content: `You are analysing a business deal-sourcing phone call transcript. The caller (Mitchel Campbell from AR Business Brokers) was calling a business owner to explore whether they are interested in selling their business.
 
-Restaurant: ${body.restaurantName}
-Dietary restrictions: ${body.dietaryRestrictions} (cross-contamination is fine — the person just cannot eat these ingredients directly)
+Business: ${body.companyName}
+Contact: ${body.contactName}
 
 Transcript:
 ${body.transcript}
 
-List every dish or menu option that was mentioned as safe, suitable, or recommended for these restrictions. Return ONLY a valid JSON array of short strings — no explanation, no markdown, no wrapping text.
+Analyse the conversation and return ONLY a valid JSON object with these fields:
 
-If no safe options were mentioned or confirmed, return an empty array.
+{
+  "outcome": "interested" | "maybe" | "not-interested" | "wrong-contact" | "send-info" | "left-voicemail" | "no-answer",
+  "notes": "2-3 sentence summary of what happened on the call and any key details mentioned (e.g., revenue, timeline, concerns)",
+  "followUpDate": "YYYY-MM-DD if a specific follow-up date was mentioned, otherwise null",
+  "emailRequested": true/false (whether the contact asked for or agreed to receive an email)
+}
 
-Examples of valid output:
-["Grilled salmon", "Caesar salad without croutons", "Ribeye steak with roasted vegetables"]
-[]`,
+Outcome definitions:
+- "interested": The contact expressed clear interest in learning more or meeting
+- "maybe": The contact was non-committal, said "not right now", or expressed potential future interest
+- "not-interested": The contact clearly declined
+- "wrong-contact": The caller reached the wrong person or the contact is not the decision maker
+- "send-info": The contact specifically asked for information to be sent (email, brochure, etc.)
+- "left-voicemail": A voicemail message was left
+- "no-answer": No meaningful conversation happened
+
+If the contact agreed to receive an email (even if they said no to the opportunity), set emailRequested to true.`,
         },
       ],
     });
 
-    const raw =
-      message.content[0].type === 'text' ? message.content[0].text.trim() : '[]';
+    const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : '{}';
 
-    let safeMenuOptions: string[] = [];
+    let result: { outcome?: string; notes?: string; followUpDate?: string | null; emailRequested?: boolean } = {};
     try {
-      safeMenuOptions = JSON.parse(raw);
-      if (!Array.isArray(safeMenuOptions)) safeMenuOptions = [];
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        result = JSON.parse(match[0]);
+      }
     } catch {
-      safeMenuOptions = [];
+      result = {};
     }
 
-    // Update whisper context so inbound callbacks have the latest menu options
+    const outcome: CallOutcome = VALID_OUTCOMES.has(result.outcome ?? '')
+      ? (result.outcome as CallOutcome)
+      : 'maybe';
+    const notes = typeof result.notes === 'string' ? result.notes : '';
+    const followUpDate = typeof result.followUpDate === 'string' ? result.followUpDate : null;
+    const emailRequested = result.emailRequested === true;
+
+    // Update whisper context with outcome
     if (body.phone) {
       try {
-        await updateWhisperMenuOptions(body.phone, safeMenuOptions);
+        await updateWhisperOutcome(body.phone, outcome);
       } catch {
         // Non-fatal
       }
     }
 
-    return Response.json({ safeMenuOptions } satisfies SummariseResponse);
+    return Response.json({ outcome, notes, followUpDate, emailRequested } satisfies AnalyseCallResponse);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Summarisation failed.';
+    const errMessage = err instanceof Error ? err.message : 'Call analysis failed.';
     console.error('[call/summarise]', err);
     return Response.json(
-      { safeMenuOptions: [], error: message } satisfies SummariseResponse,
+      { outcome: 'maybe' as CallOutcome, notes: '', followUpDate: null, emailRequested: false, error: errMessage } satisfies AnalyseCallResponse,
       { status: 500 }
     );
   }

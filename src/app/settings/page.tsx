@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import type { AgentSettings, PromptSection } from '@/lib/types';
-import { DEFAULT_AGENT_SETTINGS, buildPromptSections, assemblePromptFromSections } from '@/lib/utils';
+import { DEFAULT_AGENT_SETTINGS, buildPromptSections, assemblePromptFromSections, INDUSTRY_OPTIONS } from '@/lib/utils';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -202,7 +202,7 @@ function PromptSectionPreview({
               rows={3}
               value={customValue}
               onChange={(e) => onCustomChange(e.target.value)}
-              placeholder="Add any additional instructions for this section…"
+              placeholder="Add any additional instructions for this section..."
               className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
             />
             {customValue.length > 0 && (
@@ -294,13 +294,17 @@ export default function SettingsPage() {
     }
   }
 
-  // Live preview — rendered with "Example Restaurant" as a stand-in
+  // Live preview with sample business
   const promptSections = useMemo(
     () =>
       buildPromptSections({
-        restaurantName: 'Example Restaurant',
-        dietaryRestrictions: '',
-        specificDish: '',
+        companyName: 'Example Company Ltd.',
+        contactName: 'John Smith',
+        city: 'Kitchener, ON',
+        industry: 'Manufacturing',
+        description: 'Established manufacturing business specializing in custom metal fabrication.',
+        researchNotes: 'In business since 1995. ~25 employees. Revenue estimated $3-5M.',
+        talkingPoints: 'Long-standing community business\nOwner approaching retirement age',
         settings,
       }),
     [settings]
@@ -324,7 +328,7 @@ export default function SettingsPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
-          Loading settings…
+          Loading settings...
         </div>
       </div>
     );
@@ -337,11 +341,11 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Agent Settings</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Control how the voice agent behaves on every outbound call. Changes take effect on the next call.
+            Control how the deal sourcing agent behaves on every outbound call. Changes take effect on the next call.
           </p>
         </div>
         <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-700 mt-1 shrink-0">
-          ← Dashboard
+          &larr; Dashboard
         </Link>
       </div>
 
@@ -351,58 +355,60 @@ export default function SettingsPage() {
         {/* ── Left column: all settings ───────────────────────────────────── */}
         <div className="space-y-6">
 
-          {/* ── 1. Identity & Introduction ─────────────────────────────────── */}
+          {/* ── 1. Agent Identity ───────────────────────────────────────────── */}
           <Section
-            title="Your Identity"
-            description="The agent IS you — it speaks in first person as you, never as an assistant or bot."
+            title="Agent Identity"
+            description="Who the agent presents itself as on calls. It speaks in first person as this identity."
           >
             <Field
-              label="Your name"
-              hint="The agent introduces itself using this name. It speaks as you — not on your behalf. Used in the opening line and voicemail scripts."
+              label="Agent name"
+              hint="The name the agent uses when introducing itself on calls."
             >
               <input
                 type="text"
-                value={settings.ownerName}
-                onChange={(e) => update('ownerName', e.target.value)}
+                value={settings.agentName}
+                onChange={(e) => update('agentName', e.target.value)}
                 placeholder="Mitchel Campbell"
                 className={inputCls}
               />
             </Field>
 
             <Field
-              label="Opening line"
-              hint="The very first thing said when the call connects. Spoken in first person as you — no mention of AI or assistants. Use {restaurantName} as a placeholder."
+              label="Company name"
+              hint="The brokerage or firm the agent represents."
             >
-              <textarea
-                rows={2}
-                value={settings.openingLine}
-                onChange={(e) => update('openingLine', e.target.value)}
-                placeholder="Hi, I'm calling on behalf of…"
+              <input
+                type="text"
+                value={settings.companyName}
+                onChange={(e) => update('companyName', e.target.value)}
+                placeholder="AR Business Brokers"
                 className={inputCls}
               />
             </Field>
 
-            <Field label="Caller tone">
-              <RadioGroup
-                options={[
-                  {
-                    value: 'friendly',
-                    label: 'Friendly',
-                    description: 'Warm and approachable — the default. Feels like a real person calling.',
-                  },
-                  {
-                    value: 'professional',
-                    label: 'Professional',
-                    description: 'Polished and formal. Complete sentences, no contractions.',
-                  },
-                  {
-                    value: 'casual',
-                    label: 'Casual',
-                    description: 'Relaxed and informal — as if chatting with a neighbour.',
-                  },
-                ]}
-                value={settings.callerTone}
-                onChange={(v) => update('callerTone', v as AgentSettings['callerTone'])}
+            <Field
+              label="Company phone"
+              hint="The company phone number in E.164 format. Used in voicemail scripts."
+            >
+              <input
+                type="tel"
+                value={settings.companyPhone}
+                onChange={(e) => update('companyPhone', e.target.value)}
+                placeholder="+14374943600"
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
+              label="Company website"
+              hint="Mentioned if the prospect asks for more information."
+            >
+              <input
+                type="text"
+                value={settings.companyWebsite}
+                onChange={(e) => update('companyWebsite', e.target.value)}
+                placeholder="arbb.ca"
+                className={inputCls}
               />
             </Field>
 
@@ -413,14 +419,245 @@ export default function SettingsPage() {
             />
           </Section>
 
-          {/* ── 2. Voice & Audio ───────────────────────────────────────────── */}
+          {/* ── 2. Buyer Profile ────────────────────────────────────────────── */}
+          <Section
+            title="Buyer Profile"
+            description="Describes the buyer the agent represents. This information shapes how the agent describes the opportunity."
+          >
+            <Field
+              label="Buyer description"
+              hint="A paragraph describing the buyer without revealing their identity. Injected into the system prompt."
+            >
+              <textarea
+                rows={4}
+                value={settings.buyerDescription}
+                onChange={(e) => update('buyerDescription', e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+
+            <Field
+              label="Target industries"
+              hint="Select which industries the buyer is interested in."
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {INDUSTRY_OPTIONS.map((ind) => (
+                  <label key={ind} className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.targetIndustries.includes(ind)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          update('targetIndustries', [...settings.targetIndustries, ind]);
+                        } else {
+                          update('targetIndustries', settings.targetIndustries.filter((i) => i !== ind));
+                        }
+                      }}
+                      className="accent-zinc-900"
+                    />
+                    {ind}
+                  </label>
+                ))}
+              </div>
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Revenue range" hint="Annual revenue target.">
+                <input
+                  type="text"
+                  value={settings.revenueRange}
+                  onChange={(e) => update('revenueRange', e.target.value)}
+                  placeholder="$1M - $10M"
+                  className={inputCls}
+                />
+              </Field>
+
+              <Field label="EBITDA range" hint="Target earnings range.">
+                <input
+                  type="text"
+                  value={settings.ebitdaRange}
+                  onChange={(e) => update('ebitdaRange', e.target.value)}
+                  placeholder="$500K - $3M"
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Geography" hint="Target geographic area.">
+                <input
+                  type="text"
+                  value={settings.geography}
+                  onChange={(e) => update('geography', e.target.value)}
+                  placeholder="Southwestern Ontario"
+                  className={inputCls}
+                />
+              </Field>
+
+              <Field label="Max purchase price" hint="Upper limit for acquisition.">
+                <input
+                  type="text"
+                  value={settings.maxPurchasePrice}
+                  onChange={(e) => update('maxPurchasePrice', e.target.value)}
+                  placeholder="$5M"
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+
+            <PromptSectionPreview
+              section={getSection('buyer')}
+              customValue={settings.customPromptBuyer}
+              onCustomChange={(v) => update('customPromptBuyer', v)}
+            />
+          </Section>
+
+          {/* ── 3. Call Behavior ────────────────────────────────────────────── */}
+          <Section
+            title="Call Behavior"
+            description="How the agent conducts each outbound call."
+          >
+            <Field label="First message mode">
+              <RadioGroup
+                options={[
+                  {
+                    value: 'assistant-waits-for-user',
+                    label: 'Wait for greeting',
+                    description: 'The agent waits for the prospect to say hello before speaking. More natural.',
+                  },
+                  {
+                    value: 'assistant-speaks-first',
+                    label: 'Speak first',
+                    description: 'The agent introduces itself immediately after the call connects.',
+                  },
+                ]}
+                value={settings.firstMessageMode}
+                onChange={(v) => update('firstMessageMode', v as AgentSettings['firstMessageMode'])}
+              />
+            </Field>
+
+            <Field
+              label="Screening response"
+              hint='What the agent says when asked "Who is calling?" before being connected.'
+            >
+              <input
+                type="text"
+                value={settings.screeningResponse}
+                onChange={(e) => update('screeningResponse', e.target.value)}
+                placeholder="Mitchel Campbell"
+                className={inputCls}
+              />
+            </Field>
+
+            <SliderField
+              label="Max call duration"
+              hint="Vapi automatically ends the call after this time."
+              value={settings.maxCallDurationSeconds}
+              min={60}
+              max={600}
+              step={30}
+              format={fmtDuration}
+              onChange={(v) => update('maxCallDurationSeconds', v)}
+            />
+
+            <SliderField
+              label="Silence timeout"
+              hint="Vapi ends the call if there is silence for this long."
+              value={settings.silenceTimeoutSeconds}
+              min={5}
+              max={60}
+              step={1}
+              format={(v) => `${v}s`}
+              onChange={(v) => update('silenceTimeoutSeconds', v)}
+            />
+
+            <PromptSectionPreview
+              section={getSection('opening')}
+              customValue={settings.customPromptOpening}
+              onCustomChange={(v) => update('customPromptOpening', v)}
+            />
+
+            <PromptSectionPreview
+              section={getSection('handling')}
+              customValue={settings.customPromptHandling}
+              onCustomChange={(v) => update('customPromptHandling', v)}
+            />
+
+            <PromptSectionPreview
+              section={getSection('rules')}
+              customValue={settings.customPromptRules}
+              onCustomChange={(v) => update('customPromptRules', v)}
+            />
+          </Section>
+
+          {/* ── 4. Voicemail Settings ──────────────────────────────────────── */}
+          <Section
+            title="Voicemail Settings"
+            description="What happens when the call goes to voicemail."
+          >
+            <Field label="Leave voicemail?">
+              <Toggle
+                checked={settings.voicemailEnabled}
+                onChange={(v) => update('voicemailEnabled', v)}
+                label="Leave a voicemail message"
+              />
+            </Field>
+
+            {settings.voicemailEnabled && (
+              <>
+                <Field
+                  label="Voicemail script"
+                  hint='Spoken in first person. Use {{contact_name}}, {{industry_description}}, {{geography}} as placeholders.'
+                >
+                  <textarea
+                    rows={4}
+                    value={settings.voicemailScript}
+                    onChange={(e) => update('voicemailScript', e.target.value)}
+                    className={inputCls}
+                  />
+                </Field>
+
+                <Field
+                  label="Callback number"
+                  hint="The phone number left in the voicemail for the prospect to call back."
+                >
+                  <input
+                    type="tel"
+                    value={settings.callbackNumber}
+                    onChange={(e) => update('callbackNumber', e.target.value)}
+                    placeholder="437-494-3600"
+                    className={inputCls}
+                  />
+                </Field>
+              </>
+            )}
+
+            <PromptSectionPreview
+              section={getSection('voicemail')}
+              customValue={settings.customPromptVoicemail}
+              onCustomChange={(v) => update('customPromptVoicemail', v)}
+            />
+          </Section>
+
+          {/* ── 5. Voice & Audio ────────────────────────────────────────────── */}
           <Section
             title="Voice & Audio"
             description="ElevenLabs voice parameters. Changes apply to the next outbound call."
           >
             <SliderField
+              label="Speaking speed"
+              hint="1.0 is normal speed. Vapi caps ElevenLabs speed at 1.2x."
+              value={settings.voiceSpeed}
+              min={0.8}
+              max={1.2}
+              step={0.05}
+              format={(v) => `${v.toFixed(2)}x`}
+              onChange={(v) => update('voiceSpeed', v)}
+            />
+
+            <SliderField
               label="Voice stability"
-              hint="Higher = more consistent and predictable. Lower = more expressive and variable."
+              hint="Higher = more consistent. Lower = more expressive."
               value={settings.voiceStability}
               min={0}
               max={1}
@@ -431,7 +668,7 @@ export default function SettingsPage() {
 
             <SliderField
               label="Similarity boost"
-              hint="How closely the voice matches the original clone. Higher = truer to source, but can introduce artefacts."
+              hint="How closely the voice matches the original clone."
               value={settings.voiceSimilarityBoost}
               min={0}
               max={1}
@@ -440,32 +677,7 @@ export default function SettingsPage() {
               onChange={(v) => update('voiceSimilarityBoost', v)}
             />
 
-            <SliderField
-              label="Speaking speed"
-              hint="1.0 is normal speed. Vapi caps ElevenLabs speed at 1.2×."
-              value={settings.voiceSpeed}
-              min={0.5}
-              max={1.2}
-              step={0.05}
-              format={(v) => `${v.toFixed(2)}×`}
-              onChange={(v) => update('voiceSpeed', v)}
-            />
-
-            <SliderField
-              label="Style exaggeration"
-              hint="Amplifies the natural style of the voice. 0 = neutral; higher values can sound more expressive but less stable."
-              value={settings.voiceStyle}
-              min={0}
-              max={1}
-              step={0.05}
-              format={fmtPercent}
-              onChange={(v) => update('voiceStyle', v)}
-            />
-
-            <Field
-              label="ElevenLabs model"
-              hint="The speech synthesis model. Turbo v2.5 has the best voice quality for real-time calls."
-            >
+            <Field label="ElevenLabs model">
               <RadioGroup
                 options={[
                   {
@@ -489,10 +701,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field
-              label="Speaker boost"
-              hint="Enhances voice presence and clarity — recommended on."
-            >
+            <Field label="Speaker boost" hint="Enhances voice presence and clarity.">
               <Toggle
                 checked={settings.useSpeakerBoost}
                 onChange={(v) => update('useSpeakerBoost', v)}
@@ -500,62 +709,10 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field
-              label="Streaming quality"
-              hint="Lower latency values sacrifice voice quality for speed."
-            >
+            <Field label="Background sound" hint="Ambient sound played on the agent's side during the call.">
               <RadioGroup
                 options={[
-                  {
-                    value: '2',
-                    label: 'Best quality (latency 2)',
-                    description: 'Highest voice fidelity — slight delay.',
-                  },
-                  {
-                    value: '3',
-                    label: 'Balanced (latency 3)',
-                    description: 'Good quality with lower latency.',
-                  },
-                  {
-                    value: '4',
-                    label: 'Fastest (latency 4)',
-                    description: 'Lowest latency but reduced voice quality.',
-                  },
-                ]}
-                value={String(settings.optimizeStreamingLatency)}
-                onChange={(v) => update('optimizeStreamingLatency', Number(v))}
-              />
-            </Field>
-
-            <Field
-              label="Filler words"
-              hint='When on, the agent may say "um", "uh", or brief pauses to sound more natural.'
-            >
-              <Toggle
-                checked={settings.fillerWordsEnabled}
-                onChange={(v) => update('fillerWordsEnabled', v)}
-                label='Use filler words ("um", "uh")'
-              />
-            </Field>
-
-            <Field
-              label="Background denoising"
-              hint="Reduces background noise from the restaurant's side using Krisp."
-            >
-              <Toggle
-                checked={settings.backgroundDenoisingEnabled}
-                onChange={(v) => update('backgroundDenoisingEnabled', v)}
-                label="Background noise reduction"
-              />
-            </Field>
-
-            <Field
-              label="Background sound"
-              hint="Ambient sound played on the agent's side during the call. Vapi defaults to 'office' for phone calls."
-            >
-              <RadioGroup
-                options={[
-                  { value: 'off', label: 'Off', description: 'Silence — no background sound.' },
+                  { value: 'off', label: 'Off', description: 'Silence -- no background sound.' },
                   { value: 'office', label: 'Office', description: 'Subtle call centre ambience.' },
                   { value: 'custom', label: 'Custom audio URL', description: 'Loop your own audio file.' },
                 ]}
@@ -565,10 +722,7 @@ export default function SettingsPage() {
             </Field>
 
             {settings.backgroundSound !== 'off' && settings.backgroundSound !== 'office' && (
-              <Field
-                label="Custom audio URL"
-                hint="URL to an audio file (MP3, WAV). Vapi loops this during the call."
-              >
+              <Field label="Custom audio URL">
                 <input
                   type="url"
                   value={settings.backgroundSound}
@@ -580,388 +734,51 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          {/* ── 3. Dietary Restrictions & Conversation ─────────────────────── */}
+          {/* ── 6. Follow-up Email Template ─────────────────────────────────── */}
           <Section
-            title="Dietary Restrictions & Conversation"
-            description="What the agent asks about. Individual searches can override the restriction fields."
+            title="Follow-up Email Template"
+            description="Template for follow-up emails when a prospect requests more information. Use {{variable}} placeholders."
           >
             <Field
-              label="Restrictions"
-              hint='Comma-separated list of ingredients to avoid. E.g. "garlic, soy, shellfish".'
+              label="Email subject"
+              hint="Use {{company_name}}, {{contact_name}}, {{agent_name}} as placeholders."
             >
               <input
                 type="text"
-                value={settings.dietaryRestrictions}
-                onChange={(e) => update('dietaryRestrictions', e.target.value)}
-                placeholder="garlic, soy"
+                value={settings.emailSubjectTemplate}
+                onChange={(e) => update('emailSubjectTemplate', e.target.value)}
+                placeholder="Following up on our conversation - {{agent_name}} from {{company_name}}"
                 className={inputCls}
               />
             </Field>
 
             <Field
-              label="Cross-contamination OK?"
-              hint="When on, the agent tells the restaurant that cross-contamination is acceptable — only dishes that directly contain restricted ingredients are a concern."
-            >
-              <Toggle
-                checked={settings.crossContaminationOk}
-                onChange={(v) => update('crossContaminationOk', v)}
-                label="Cross-contamination is acceptable"
-              />
-            </Field>
-
-            <Field
-              label="Restriction details"
-              hint="A detailed breakdown of what each restriction actually covers. The agent uses this to answer follow-up questions accurately."
+              label="Email body"
+              hint="Full email body template. Supports {{company_name}}, {{contact_name}}, {{agent_name}}, {{brokerage_name}}, {{website}}."
             >
               <textarea
-                rows={3}
-                value={settings.restrictionDetails}
-                onChange={(e) => update('restrictionDetails', e.target.value)}
-                placeholder="e.g. Garlic includes garlic powder, garlic oil and garlic salt. Soy includes soy sauce, tofu, miso and edamame — but soy lecithin is fine."
+                rows={8}
+                value={settings.emailBodyTemplate}
+                onChange={(e) => update('emailBodyTemplate', e.target.value)}
                 className={inputCls}
               />
             </Field>
-
-            <Field
-              label="Extra restriction notes"
-              hint="Optional. Any additional context. E.g. severity level, hidden sources to watch out for."
-            >
-              <textarea
-                rows={2}
-                value={settings.restrictionNotes}
-                onChange={(e) => update('restrictionNotes', e.target.value)}
-                placeholder="e.g. Even small traces of garlic cause a reaction — not just a preference."
-                className={inputCls}
-              />
-            </Field>
-
-            <Field
-              label="Foods I prefer not to eat"
-              hint="Optional. Foods you simply don't enjoy — even if they're technically safe. The agent won't ask about or suggest these."
-            >
-              <textarea
-                rows={2}
-                value={settings.foodsToAvoid}
-                onChange={(e) => update('foodsToAvoid', e.target.value)}
-                placeholder="e.g. salads, fried food, heavy pasta dishes"
-                className={inputCls}
-              />
-            </Field>
-
-            <Field
-              label="Dishes to prioritise"
-              hint="Optional. Types of dishes to ask about first. The agent leads with these when exploring safe options."
-            >
-              <textarea
-                rows={2}
-                value={settings.dishesToPrioritise}
-                onChange={(e) => update('dishesToPrioritise', e.target.value)}
-                placeholder="e.g. Fish, chicken, or beef dishes. Avoid heavy pasta or fried food."
-                className={inputCls}
-              />
-            </Field>
-
-            <Field
-              label="Dish preferences"
-              hint="Optional. General style preferences that inform what the agent asks about. E.g. 'pasta, grilled fish, salads'."
-            >
-              <input
-                type="text"
-                value={settings.dishPreferences}
-                onChange={(e) => update('dishPreferences', e.target.value)}
-                placeholder="e.g. pasta, grilled fish, salads"
-                className={inputCls}
-              />
-            </Field>
-
-            <Field
-              label="Conversation style notes"
-              hint="Optional. Tone or manner guidance specific to dietary conversations."
-            >
-              <textarea
-                rows={2}
-                value={settings.conversationStyleNotes}
-                onChange={(e) => update('conversationStyleNotes', e.target.value)}
-                placeholder="e.g. Be warm and slightly apologetic about the dietary questions — acknowledge it's a lot to ask."
-                className={inputCls}
-              />
-            </Field>
-
-            <Field
-              label="How to end the call"
-              hint="Optional. Specific closing language or sentiment to use when wrapping up."
-            >
-              <textarea
-                rows={2}
-                value={settings.callEndingNotes}
-                onChange={(e) => update('callEndingNotes', e.target.value)}
-                placeholder="e.g. End warmly — say something like 'I'll definitely consider coming in, thanks so much for your help.'"
-                className={inputCls}
-              />
-            </Field>
-
-            <Field label="If the restaurant is unsure whether a dish is safe…">
-              <RadioGroup
-                options={[
-                  {
-                    value: 'escalate',
-                    label: 'Ask to speak with someone who knows',
-                    description: 'Request the chef or manager before accepting an uncertain answer.',
-                  },
-                  {
-                    value: 'ask-again',
-                    label: 'Gently rephrase and ask once more',
-                    description: "Rephrase the question once, then accept whatever answer they give.",
-                  },
-                  {
-                    value: 'accept',
-                    label: 'Accept their best guess',
-                    description: 'Note the dish as uncertain and move on.',
-                  },
-                ]}
-                value={settings.uncertaintyBehaviour}
-                onChange={(v) => update('uncertaintyBehaviour', v as AgentSettings['uncertaintyBehaviour'])}
-              />
-            </Field>
-
-            <PromptSectionPreview
-              section={getSection('dietary')}
-              customValue={settings.customPromptDietary}
-              onCustomChange={(v) => update('customPromptDietary', v)}
-            />
-          </Section>
-
-          {/* ── 4. Call Behaviour ──────────────────────────────────────────── */}
-          <Section
-            title="Call Behaviour"
-            description="How the agent conducts each call, handles silence, and retries."
-          >
-            <SliderField
-              label="Max call duration"
-              hint="Vapi automatically ends the call after this time."
-              value={settings.maxCallDurationSeconds}
-              min={60}
-              max={600}
-              step={30}
-              format={fmtDuration}
-              onChange={(v) => update('maxCallDurationSeconds', v)}
-            />
-
-            <Field label="Call style">
-              <RadioGroup
-                options={[
-                  {
-                    value: 'brief',
-                    label: 'Brief',
-                    description: 'Concise and direct — in and out in under 2 minutes.',
-                  },
-                  {
-                    value: 'thorough',
-                    label: 'Thorough',
-                    description: 'Asks follow-up questions about ingredients and preparation. Takes longer but gets more detail.',
-                  },
-                ]}
-                value={settings.callStyle}
-                onChange={(v) => update('callStyle', v as AgentSettings['callStyle'])}
-              />
-            </Field>
-
-            <Field
-              label="End call if unable to help?"
-              hint="When on, the agent politely hangs up if the restaurant doesn't know. When off, it asks for the chef or manager."
-            >
-              <Toggle
-                checked={settings.endCallIfUnableToHelp}
-                onChange={(v) => update('endCallIfUnableToHelp', v)}
-                label="Hang up if no one can help"
-              />
-            </Field>
-
-            <SliderField
-              label="Silence timeout"
-              hint="Vapi ends the call if there is silence for this long."
-              value={settings.silenceTimeoutSeconds}
-              min={5}
-              max={30}
-              step={1}
-              format={(v) => `${v}s`}
-              onChange={(v) => update('silenceTimeoutSeconds', v)}
-            />
-
-            <Field label="If placed on hold…">
-              <RadioGroup
-                options={[
-                  {
-                    value: 'wait',
-                    label: 'Wait patiently',
-                    description: 'Stay on hold for as long as needed.',
-                  },
-                  {
-                    value: 'hang-up',
-                    label: 'Hang up after 30 seconds',
-                    description: 'End the call politely if left on hold.',
-                  },
-                ]}
-                value={settings.holdBehaviour}
-                onChange={(v) => update('holdBehaviour', v as AgentSettings['holdBehaviour'])}
-              />
-            </Field>
-
-            <SliderField
-              label="Max retries"
-              hint="How many times to retry a failed or unanswered call before giving up."
-              value={settings.maxRetries}
-              min={0}
-              max={3}
-              step={1}
-              format={(v) => (v === 0 ? 'No retries' : `${v} retr${v === 1 ? 'y' : 'ies'}`)}
-              onChange={(v) => update('maxRetries', v)}
-            />
-
-            {settings.maxRetries > 0 && (
-              <SliderField
-                label="Retry delay"
-                hint="How long to wait before retrying a failed call."
-                value={settings.retryDelayMinutes}
-                min={5}
-                max={120}
-                step={5}
-                format={(v) => `${v} min`}
-                onChange={(v) => update('retryDelayMinutes', v)}
-              />
-            )}
-
-            <PromptSectionPreview
-              section={getSection('goals')}
-              customValue={settings.customPromptGoals}
-              onCustomChange={(v) => update('customPromptGoals', v)}
-            />
-
-            <PromptSectionPreview
-              section={getSection('rules')}
-              customValue={settings.customPromptRules}
-              onCustomChange={(v) => update('customPromptRules', v)}
-            />
-          </Section>
-
-          {/* ── 5. Voicemail Handling ──────────────────────────────────────── */}
-          <Section
-            title="Voicemail Handling"
-            description="What the agent does if a restaurant doesn't pick up."
-          >
-            <Field label="If the call goes to voicemail…">
-              <RadioGroup
-                options={[
-                  {
-                    value: 'hang-up',
-                    label: 'Hang up silently',
-                    description: 'End the call without leaving a message.',
-                  },
-                  {
-                    value: 'leave-message',
-                    label: 'Leave a message',
-                    description: 'Recite a custom script, then hang up.',
-                  },
-                ]}
-                value={settings.voicemailBehaviour}
-                onChange={(v) => update('voicemailBehaviour', v as AgentSettings['voicemailBehaviour'])}
-              />
-            </Field>
-
-            {settings.voicemailBehaviour === 'leave-message' && (
-              <Field
-                label="Voicemail script"
-                hint="Spoken in first person as you. Use {restaurantName} and {ownerName} as placeholders."
-              >
-                <textarea
-                  rows={3}
-                  value={settings.voicemailScript}
-                  onChange={(e) => update('voicemailScript', e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-            )}
-
-            <PromptSectionPreview
-              section={getSection('voicemail')}
-              customValue={settings.customPromptVoicemail}
-              onCustomChange={(v) => update('customPromptVoicemail', v)}
-            />
-          </Section>
-
-          {/* ── 6. Menu Research ───────────────────────────────────────────── */}
-          <Section
-            title="Menu Research"
-            description="Before calling, the app looks up each restaurant's website and uses Claude to suggest safe dishes for you to approve."
-          >
-            <Field
-              label="Enable menu pre-research?"
-              hint="When on, the app fetches each restaurant's website and identifies likely safe dishes before any call is made. Dishes require your approval before the call starts."
-            >
-              <Toggle
-                checked={settings.menuResearchEnabled}
-                onChange={(v) => update('menuResearchEnabled', v)}
-                label="Research menus before calling"
-              />
-            </Field>
-
-            {settings.menuResearchEnabled && (
-              <>
-                <SliderField
-                  label="Max dishes to suggest"
-                  hint="Maximum number of dishes Claude will identify per restaurant."
-                  value={settings.menuResearchMaxDishes}
-                  min={2}
-                  max={4}
-                  step={1}
-                  format={(v) => `${v} dishes`}
-                  onChange={(v) => update('menuResearchMaxDishes', v)}
-                />
-
-                <Field
-                  label="Minimum confidence to show"
-                  hint="Hide suggestions below this confidence level."
-                >
-                  <RadioGroup
-                    options={[
-                      {
-                        value: 'low',
-                        label: 'All dishes',
-                        description: 'Show high, medium, and low confidence suggestions.',
-                      },
-                      {
-                        value: 'medium',
-                        label: 'Medium and above',
-                        description: 'Hide low confidence dishes.',
-                      },
-                      {
-                        value: 'high',
-                        label: 'High confidence only',
-                        description: "Only show dishes Claude is very confident are safe.",
-                      },
-                    ]}
-                    value={settings.menuResearchConfidenceThreshold}
-                    onChange={(v) => update('menuResearchConfidenceThreshold', v as AgentSettings['menuResearchConfidenceThreshold'])}
-                  />
-                </Field>
-              </>
-            )}
           </Section>
 
           {/* ── 7. Inbound / Callback ──────────────────────────────────────── */}
           <Section
             title="Inbound / Callback"
-            description="Settings for when a restaurant calls back your Vapi number."
+            description="Settings for when a business owner calls back your Vapi number."
           >
             <Field
               label="Your phone number"
-              hint="Your real phone number in E.164 format. When a restaurant calls back, they'll be transferred to you after the whisper plays. E.g. +16135551234."
+              hint="Your real phone number in E.164 format. Inbound calls are transferred to you after the whisper plays."
             >
               <input
                 type="tel"
                 value={settings.forwardingNumber}
                 onChange={(e) => update('forwardingNumber', e.target.value)}
-                placeholder="+16135551234"
+                placeholder="+14374943600"
                 className={inputCls}
               />
             </Field>
@@ -977,7 +794,7 @@ export default function SettingsPage() {
               onChange={(v) => update('ringTimeoutSeconds', v)}
             />
 
-            <Field label="If you don't answer…">
+            <Field label="If you don't answer...">
               <RadioGroup
                 options={[
                   {
@@ -1001,10 +818,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field
-              label="Enable call whisper?"
-              hint="When on, a brief AI-generated summary plays only to you before the call connects — restaurant name, safe dishes found, rating."
-            >
+            <Field label="Enable call whisper?">
               <Toggle
                 checked={settings.whisperEnabled}
                 onChange={(v) => update('whisperEnabled', v)}
@@ -1019,12 +833,12 @@ export default function SettingsPage() {
                     {
                       value: 'brief',
                       label: 'Brief',
-                      description: 'Restaurant name and key finding in 2–3 sentences.',
+                      description: 'Company name and call outcome in 2-3 sentences.',
                     },
                     {
                       value: 'detailed',
                       label: 'Detailed',
-                      description: 'Full summary — restaurant name, neighbourhood, rating, restrictions discussed, and all safe dishes found.',
+                      description: 'Full summary -- company name, contact, industry, city, and call outcome.',
                     },
                   ]}
                   value={settings.whisperStyle}
@@ -1034,125 +848,6 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          {/* ── 8. Notifications ───────────────────────────────────────────── */}
-          <Section
-            title="Notifications"
-            description="Email alerts for call events. Requires a webhook or SMTP integration."
-          >
-            <Field
-              label="Notify on call complete?"
-              hint="Send an email when a call finishes and safe dishes are extracted."
-            >
-              <Toggle
-                checked={settings.notifyOnCallComplete}
-                onChange={(v) => update('notifyOnCallComplete', v)}
-                label="Email on call complete"
-              />
-            </Field>
-
-            <Field
-              label="Notify on missed callback?"
-              hint="Send an email if a restaurant calls back and you don't answer."
-            >
-              <Toggle
-                checked={settings.notifyOnMissedCallback}
-                onChange={(v) => update('notifyOnMissedCallback', v)}
-                label="Email on missed callback"
-              />
-            </Field>
-
-            {(settings.notifyOnCallComplete || settings.notifyOnMissedCallback) && (
-              <Field
-                label="Notification email"
-                hint="Where to send alerts."
-              >
-                <input
-                  type="email"
-                  value={settings.notifyEmail}
-                  onChange={(e) => update('notifyEmail', e.target.value)}
-                  placeholder="you@example.com"
-                  className={inputCls}
-                />
-              </Field>
-            )}
-
-            <Field
-              label="Webhook URL"
-              hint="Optional. POST call events to this URL as JSON. Leave blank to disable."
-            >
-              <input
-                type="url"
-                value={settings.webhookUrl}
-                onChange={(e) => update('webhookUrl', e.target.value)}
-                placeholder="https://your-server.com/webhook"
-                className={inputCls}
-              />
-            </Field>
-          </Section>
-
-          {/* ── 9. Dashboard Defaults ──────────────────────────────────────── */}
-          <Section
-            title="Dashboard Defaults"
-            description="Pre-fill the search form with these values each time you start a new search."
-          >
-            <SliderField
-              label="Default search radius"
-              hint="How far from the searched location to look for restaurants."
-              value={settings.defaultSearchRadius}
-              min={1}
-              max={20}
-              step={1}
-              format={(v) => `${v} km`}
-              onChange={(v) => update('defaultSearchRadius', v)}
-            />
-
-            <SliderField
-              label="Default minimum rating"
-              hint="Only show restaurants at or above this Google Maps rating."
-              value={settings.defaultMinRating}
-              min={0}
-              max={5}
-              step={0.5}
-              format={(v) => `${v.toFixed(1)} ★`}
-              onChange={(v) => update('defaultMinRating', v)}
-            />
-
-            <Field
-              label="Default cuisine type"
-              hint='Optional. Pre-fills the cuisine filter. E.g. "Italian", "Japanese". Leave blank for all cuisines.'
-            >
-              <input
-                type="text"
-                value={settings.defaultCuisineType}
-                onChange={(e) => update('defaultCuisineType', e.target.value)}
-                placeholder="e.g. Italian, Japanese (optional)"
-                className={inputCls}
-              />
-            </Field>
-
-            <SliderField
-              label="Default max restaurants"
-              hint="How many restaurants to load per search by default."
-              value={settings.defaultMaxRestaurants}
-              min={5}
-              max={20}
-              step={1}
-              format={(v) => `${v} restaurants`}
-              onChange={(v) => update('defaultMaxRestaurants', v)}
-            />
-
-            <Field
-              label="Auto-start calls after search?"
-              hint="When on, calls begin automatically as soon as a search completes — no manual trigger required."
-            >
-              <Toggle
-                checked={settings.autoStartCalls}
-                onChange={(v) => update('autoStartCalls', v)}
-                label="Auto-start calls"
-              />
-            </Field>
-          </Section>
-
           {/* ── Save button ────────────────────────────────────────────────── */}
           <div className="flex items-center gap-4">
             <button
@@ -1160,7 +855,7 @@ export default function SettingsPage() {
               disabled={saving}
               className="rounded-lg bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50 transition-colors"
             >
-              {saving ? 'Saving…' : 'Save Settings'}
+              {saving ? 'Saving...' : 'Save Settings'}
             </button>
 
             {saveStatus === 'saved' && (
@@ -1177,7 +872,7 @@ export default function SettingsPage() {
                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
                 </svg>
-                Failed to save — please try again
+                Failed to save -- please try again
               </span>
             )}
 
@@ -1209,7 +904,7 @@ export default function SettingsPage() {
             </div>
             <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
               Exactly what the agent will be told at the start of each outbound call.{' '}
-              <span className="italic">"Example Restaurant"</span> is substituted with the real restaurant name at call time.
+              <span className="italic">&quot;Example Company Ltd.&quot;</span> is substituted with the real business at call time.
             </p>
             <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 p-3">
               <FormattedPromptPreview text={fullPromptPreview} />

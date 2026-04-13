@@ -19,11 +19,11 @@ export default function VoicemailCard({ voicemail: vm, onMarkReviewed }: Voicema
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-semibold text-zinc-900">
-            {vm.restaurantName ?? formatPhone(vm.restaurantPhone)}
+            {vm.businessName ?? formatPhone(vm.businessPhone)}
           </p>
           <p className="text-sm text-zinc-500">{formatDate(vm.receivedAt)}</p>
-          {!vm.restaurantName && (
-            <p className="text-xs text-zinc-400">{formatPhone(vm.restaurantPhone)}</p>
+          {!vm.businessName && (
+            <p className="text-xs text-zinc-400">{formatPhone(vm.businessPhone)}</p>
           )}
         </div>
         {!vm.reviewed && (
@@ -36,7 +36,7 @@ export default function VoicemailCard({ voicemail: vm, onMarkReviewed }: Voicema
         )}
         {vm.reviewed && (
           <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-500">
-            ✓ Reviewed
+            Reviewed
           </span>
         )}
       </div>

@@ -1,54 +1,50 @@
 'use client';
 
-import type { Restaurant, SearchSession } from './types';
+import type { Business, SearchSession } from './types';
 
-const RESTAURANTS_KEY = 'rpa_restaurants';
-const SESSIONS_KEY = 'rpa_sessions';
+const BUSINESSES_KEY = 'dsa_businesses';
+const SESSIONS_KEY = 'dsa_sessions';
 
-// ─── Restaurants ─────────────────────────────────────────────────────────────
+// ─── Businesses ─────────────────────────────────────────────────────────────
 
-export function getRestaurants(): Restaurant[] {
+export function getBusinesses(): Business[] {
   try {
-    const raw = localStorage.getItem(RESTAURANTS_KEY);
+    const raw = localStorage.getItem(BUSINESSES_KEY);
     if (!raw) return [];
-    const list = JSON.parse(raw) as Restaurant[];
-    // Backfill suggestedDishes for restaurants created before this field existed
-    return list.map((r) =>
-      Array.isArray(r.suggestedDishes) ? r : { ...r, suggestedDishes: [] }
-    );
+    return JSON.parse(raw) as Business[];
   } catch {
     return [];
   }
 }
 
-export function saveRestaurants(list: Restaurant[]): void {
+export function saveBusinesses(list: Business[]): void {
   try {
-    localStorage.setItem(RESTAURANTS_KEY, JSON.stringify(list));
+    localStorage.setItem(BUSINESSES_KEY, JSON.stringify(list));
   } catch {
     // localStorage may be full or unavailable — silently fail
   }
 }
 
-export function getRestaurantById(id: string): Restaurant | undefined {
-  return getRestaurants().find((r) => r.id === id);
+export function getBusinessById(id: string): Business | undefined {
+  return getBusinesses().find((b) => b.id === id);
 }
 
-export function upsertRestaurant(restaurant: Restaurant): void {
-  const list = getRestaurants();
-  const idx = list.findIndex((r) => r.id === restaurant.id);
+export function upsertBusiness(business: Business): void {
+  const list = getBusinesses();
+  const idx = list.findIndex((b) => b.id === business.id);
   if (idx >= 0) {
-    list[idx] = restaurant;
+    list[idx] = business;
   } else {
-    list.push(restaurant);
+    list.push(business);
   }
-  saveRestaurants(list);
+  saveBusinesses(list);
 }
 
-export function deleteRestaurant(id: string): void {
-  saveRestaurants(getRestaurants().filter((r) => r.id !== id));
+export function deleteBusiness(id: string): void {
+  saveBusinesses(getBusinesses().filter((b) => b.id !== id));
 }
 
-// ─── Sessions ────────────────────────────────────────────────────────────────
+// ─── Sessions ───────────────────────────────────────────────────────────────
 
 export function getSessions(): SearchSession[] {
   try {
@@ -76,7 +72,7 @@ export function getLatestSession(): SearchSession | undefined {
 
 export function clearAll(): void {
   try {
-    localStorage.removeItem(RESTAURANTS_KEY);
+    localStorage.removeItem(BUSINESSES_KEY);
     localStorage.removeItem(SESSIONS_KEY);
   } catch {
     // silently fail

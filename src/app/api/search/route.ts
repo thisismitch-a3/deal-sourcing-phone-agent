@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import type { SearchApiRequest, SearchApiResponse, SearchApiRestaurant } from '@/lib/types';
+import type { SearchApiRequest, SearchApiResponse, SearchApiBusiness } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +19,7 @@ interface PlacesResult {
 interface PlaceDetailsResult {
   formatted_phone_number?: string;
   international_phone_number?: string;
+  website?: string;
 }
 
 async function geocode(location: string): Promise<{ lat: number; lng: number }> {
@@ -41,16 +42,14 @@ async function nearbySearch(
   lat: number,
   lng: number,
   radius: number,
-  minRating: number,
   maxResults: number,
-  cuisineType: string
+  businessType: string
 ): Promise<PlacesResult[]> {
   const url = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
   url.searchParams.set('location', `${lat},${lng}`);
   url.searchParams.set('radius', String(radius));
-  url.searchParams.set('type', 'restaurant');
   url.searchParams.set('key', MAPS_KEY);
-  if (cuisineType) url.searchParams.set('keyword', cuisineType);
+  if (businessType) url.searchParams.set('keyword', businessType);
 
   const res = await fetch(url.toString());
   const data = await res.json();
@@ -60,24 +59,25 @@ async function nearbySearch(
   }
 
   const results: PlacesResult[] = (data.results ?? []) as PlacesResult[];
-  return results
-    .filter((r) => (r.rating ?? 0) >= minRating)
-    .slice(0, maxResults);
+  return results.slice(0, maxResults);
 }
 
-async function getPhoneNumber(placeId: string): Promise<string | null> {
+async function getPlaceDetails(placeId: string): Promise<{ phone: string | null; website: string | null }> {
   const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
   url.searchParams.set('place_id', placeId);
-  url.searchParams.set('fields', 'formatted_phone_number,international_phone_number');
+  url.searchParams.set('fields', 'formatted_phone_number,international_phone_number,website');
   url.searchParams.set('key', MAPS_KEY);
 
   try {
     const res = await fetch(url.toString());
     const data = await res.json();
     const result = data.result as PlaceDetailsResult | undefined;
-    return result?.international_phone_number ?? result?.formatted_phone_number ?? null;
+    return {
+      phone: result?.international_phone_number ?? result?.formatted_phone_number ?? null,
+      website: result?.website ?? null,
+    };
   } catch {
-    return null;
+    return { phone: null, website: null };
   }
 }
 
@@ -87,14 +87,14 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (!body.location?.trim()) {
       return Response.json(
-        { restaurants: [], error: 'Location is required.' } satisfies SearchApiResponse,
+        { businesses: [], error: 'Location is required.' } satisfies SearchApiResponse,
         { status: 400 }
       );
     }
 
     if (!MAPS_KEY) {
       return Response.json(
-        { restaurants: [], error: 'Google Maps API key is not configured.' } satisfies SearchApiResponse,
+        { businesses: [], error: 'Google Maps API key is not configured.' } satisfies SearchApiResponse,
         { status: 500 }
       );
     }
@@ -102,43 +102,42 @@ export async function POST(request: NextRequest): Promise<Response> {
     // Step 1: Geocode
     const { lat, lng } = await geocode(body.location);
 
-    // Step 2: Nearby restaurant search
+    // Step 2: Nearby business search
     const places = await nearbySearch(
       lat,
       lng,
       body.radius,
-      body.minRating,
-      body.maxRestaurants,
-      body.cuisineType ?? ''
+      body.maxBusinesses,
+      body.businessType ?? ''
     );
 
     if (places.length === 0) {
       return Response.json(
-        { restaurants: [], error: 'No restaurants found matching your criteria. Try adjusting the filters.' } satisfies SearchApiResponse
+        { businesses: [], error: 'No businesses found matching your criteria. Try adjusting the filters.' } satisfies SearchApiResponse
       );
     }
 
-    // Step 3: Fetch phone numbers in batches of 5
-    const restaurants: SearchApiRestaurant[] = [];
+    // Step 3: Fetch phone numbers and websites in batches of 5
+    const businesses: SearchApiBusiness[] = [];
     for (let i = 0; i < places.length; i += 5) {
       const batch = places.slice(i, i + 5);
-      const phones = await Promise.all(batch.map((p) => getPhoneNumber(p.place_id)));
+      const details = await Promise.all(batch.map((p) => getPlaceDetails(p.place_id)));
       batch.forEach((place, idx) => {
-        restaurants.push({
+        businesses.push({
           name: place.name,
           address: place.vicinity,
-          rating: place.rating ?? null,
-          phone: phones[idx],
+          phone: details[idx].phone,
           placeId: place.place_id,
+          website: details[idx].website,
         });
       });
     }
 
-    return Response.json({ restaurants } satisfies SearchApiResponse);
+    return Response.json({ businesses } satisfies SearchApiResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Search failed. Please try again.';
     return Response.json(
-      { restaurants: [], error: message } satisfies SearchApiResponse,
+      { businesses: [], error: message } satisfies SearchApiResponse,
       { status: 500 }
     );
   }
