@@ -388,14 +388,13 @@ export default function SettingsPage() {
 
             <Field
               label="Agent phone number"
-              hint="The callback number spoken in voicemail scripts. This is what prospects hear — not the Vapi phone number (which is configured via environment variables)."
+              hint="Read-only. This is the Vapi outbound number used for caller ID and voicemail callbacks. To change it, update the VAPI_PHONE_NUMBER_ID environment variable and the default in code."
             >
               <input
                 type="tel"
                 value={settings.companyPhone}
-                onChange={(e) => update('companyPhone', e.target.value)}
-                placeholder="+14374943600"
-                className={inputCls}
+                readOnly
+                className={`${inputCls} bg-zinc-50 text-zinc-500 cursor-not-allowed`}
               />
             </Field>
 
