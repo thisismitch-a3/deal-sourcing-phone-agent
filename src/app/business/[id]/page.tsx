@@ -255,7 +255,17 @@ export default function BusinessDetailPage() {
 
   const b = business;
   const canCall = ['pending', 'researched', 'approved'].includes(b.callStatus) && b.phone;
-  const canRetry = b.callStatus === 'failed' && b.phone;
+  const canRetry = [
+    'failed',
+    'called-no-answer',
+    'called-left-voicemail',
+    'called-wrong-contact',
+    'called-not-interested',
+    'called-maybe',
+    'called-send-info',
+    'called-interested',
+    'callback-received',
+  ].includes(b.callStatus) && b.phone;
 
   const inputCls = 'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500';
 
