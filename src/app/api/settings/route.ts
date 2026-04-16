@@ -14,12 +14,27 @@ function filterValidKeys(obj: Record<string, unknown>): AgentSettings {
   ) as unknown as AgentSettings;
 }
 
+// Stale content markers from the old restaurant app.
+// If any stored value contains these, reset it to the default.
+const STALE_MARKERS = ['dietary', 'menu', 'garlic', 'soy', 'restaurant', '{ownerName}', '{restaurantName}'];
+function migrateStaleValues(settings: AgentSettings): AgentSettings {
+  const result = { ...settings };
+  for (const key of Object.keys(result) as (keyof AgentSettings)[]) {
+    const val = result[key];
+    if (typeof val === 'string' && STALE_MARKERS.some((m) => val.toLowerCase().includes(m.toLowerCase()))) {
+      (result as Record<string, unknown>)[key] = DEFAULT_AGENT_SETTINGS[key];
+    }
+  }
+  return result;
+}
+
 export async function GET(): Promise<Response> {
   try {
     const stored = await getAgentSettings();
     // Merge with defaults so any new fields added later are present,
     // then strip unknown keys from old app versions
-    const settings = filterValidKeys({ ...DEFAULT_AGENT_SETTINGS, ...stored });
+    const filtered = filterValidKeys({ ...DEFAULT_AGENT_SETTINGS, ...stored });
+    const settings = migrateStaleValues(filtered);
     return Response.json({ settings });
   } catch (err) {
     console.error('[settings GET]', err);
