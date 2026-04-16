@@ -387,8 +387,8 @@ export default function SettingsPage() {
             </Field>
 
             <Field
-              label="Company phone"
-              hint="The company phone number in E.164 format. Used in voicemail scripts."
+              label="Agent phone number"
+              hint="The callback number spoken in voicemail scripts. This is what prospects hear — not the Vapi phone number (which is configured via environment variables)."
             >
               <input
                 type="tel"
