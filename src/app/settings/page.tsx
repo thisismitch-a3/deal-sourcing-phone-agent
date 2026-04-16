@@ -617,18 +617,9 @@ export default function SettingsPage() {
                   />
                 </Field>
 
-                <Field
-                  label="Callback number"
-                  hint="The phone number left in the voicemail for the prospect to call back."
-                >
-                  <input
-                    type="tel"
-                    value={settings.callbackNumber}
-                    onChange={(e) => update('callbackNumber', e.target.value)}
-                    placeholder="437-494-3600"
-                    className={inputCls}
-                  />
-                </Field>
+                <p className="text-xs text-zinc-400">
+                  The callback number in the voicemail uses the Company Phone from Agent Identity above.
+                </p>
               </>
             )}
 
@@ -771,8 +762,8 @@ export default function SettingsPage() {
             description="Settings for when a business owner calls back your Vapi number."
           >
             <Field
-              label="Your phone number"
-              hint="Your real phone number in E.164 format. Inbound calls are transferred to you after the whisper plays."
+              label="Call forwarding number"
+              hint="Your personal phone number in E.164 format. When a prospect calls back, the call is forwarded here after the whisper plays. This is NOT the number prospects see — they call the Vapi number."
             >
               <input
                 type="tel"

@@ -274,7 +274,7 @@ Always end warmly:
         .replace(/\{contactName\}/g, contactName)
         .replace(/\{industryDescription\}/g, industryDesc)
         .replace(/\{geography\}/g, geography)
-        .replace(/\{callbackNumber\}/g, settings.callbackNumber || '437-494-3600')
+        .replace(/\{callbackNumber\}/g, settings.callbackNumber || settings.companyPhone || '437-494-3600')
         .replace(/\{agentName\}/g, agentName)
     : '';
 
