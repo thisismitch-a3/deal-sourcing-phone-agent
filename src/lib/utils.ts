@@ -320,6 +320,25 @@ export function buildDealSourcingSystemPrompt(params: {
   return assemblePromptFromSections(sections);
 }
 
+// ─── Voicemail script builder ───────────────────────────────────────────────
+
+export function buildVoicemailScript(params: {
+  contactName: string;
+  industry: string;
+  settings: AgentSettings;
+}): string {
+  const agentName = params.settings.agentName || 'Mitchel Campbell';
+  const geography = params.settings.geography || 'the area';
+  const industryDesc = params.industry || 'services-based';
+
+  return (params.settings.voicemailScript || DEFAULT_AGENT_SETTINGS.voicemailScript)
+    .replace(/\{contactName\}/g, params.contactName)
+    .replace(/\{industryDescription\}/g, industryDesc)
+    .replace(/\{geography\}/g, geography)
+    .replace(/\{callbackNumber\}/g, params.settings.callbackNumber || params.settings.companyPhone || '437-494-3600')
+    .replace(/\{agentName\}/g, agentName);
+}
+
 // ─── Inbound whisper helper ─────────────────────────────────────────────────
 
 export function buildWhisperPrompt(ctx: WhisperContext, style: 'brief' | 'detailed' = 'brief'): string {

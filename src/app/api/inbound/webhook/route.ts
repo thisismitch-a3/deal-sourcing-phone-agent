@@ -13,8 +13,17 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const payload = await request.json();
+
+    // Vapi wraps all server-url webhooks inside payload.message
+    const message = payload?.message ?? payload;
+
+    // Only handle assistant-request messages; acknowledge others silently
+    if (message?.type && message.type !== 'assistant-request') {
+      return Response.json({});
+    }
+
     const callerPhone: string | null =
-      payload?.call?.customer?.number ?? payload?.customer?.number ?? null;
+      message?.call?.customer?.number ?? message?.customer?.number ?? null;
 
     const mitchPhone = process.env.MITCHEL_PHONE_NUMBER;
     const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;

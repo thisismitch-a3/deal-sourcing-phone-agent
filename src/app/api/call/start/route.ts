@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { VapiClient } from '@vapi-ai/server-sdk';
 import { saveWhisperContext, getAgentSettings } from '@/lib/kv';
-import { buildDealSourcingSystemPrompt, DEFAULT_AGENT_SETTINGS } from '@/lib/utils';
+import { buildDealSourcingSystemPrompt, buildVoicemailScript, DEFAULT_AGENT_SETTINGS } from '@/lib/utils';
 import type { CallStartRequest, CallStartResponse } from '@/lib/types';
 
 function hasSingleCallId(r: unknown): r is { id: string } {
@@ -62,6 +62,15 @@ export async function POST(request: NextRequest): Promise<Response> {
       settings,
     });
 
+    // Build the voicemail message so Vapi speaks it when AMD detects voicemail
+    const voicemailMessage = settings.voicemailEnabled
+      ? buildVoicemailScript({
+          contactName: body.contactName,
+          industry: body.industry,
+          settings,
+        })
+      : undefined;
+
     const callResponse = await vapi.calls.create({
       phoneNumberId,
       customer: { number: normalizedPhone },
@@ -92,6 +101,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           provider: 'twilio' as const,
           enabled: true,
         },
+        ...(voicemailMessage ? { voicemailMessage } : {}),
         startSpeakingPlan: {
           waitSeconds: 1.5,
           smartEndpointingEnabled: true,
