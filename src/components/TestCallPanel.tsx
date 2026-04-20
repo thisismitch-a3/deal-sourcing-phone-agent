@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { upsertBusiness } from '@/lib/storage';
-import { generateId } from '@/lib/utils';
+import { generateId, buildVoicemailScript, DEFAULT_AGENT_SETTINGS } from '@/lib/utils';
 import { INDUSTRY_OPTIONS } from '@/lib/utils';
 import type {
   Business,
@@ -12,6 +12,7 @@ import type {
   AnalyseCallResponse,
   CallOutcome,
   CallStatus,
+  AgentSettings,
 } from '@/lib/types';
 import ErrorMessage from './ErrorMessage';
 import LoadingSpinner from './LoadingSpinner';
@@ -44,8 +45,48 @@ export default function TestCallPanel({ onBusinessAdded, onBusinessUpdated }: Te
   const [isCalling, setIsCalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AgentSettings>(DEFAULT_AGENT_SETTINGS);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load agent settings so the preview reflects the live voicemail script,
+  // agent name, geography, etc.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled && data?.settings) {
+          setSettings({ ...DEFAULT_AGENT_SETTINGS, ...data.settings });
+        }
+      })
+      .catch(() => {
+        // Fall back to defaults silently
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Build a live preview of what the agent will actually say
+  const preview = useMemo(() => {
+    const previewContact = contactName.trim() || 'the contact';
+    const previewIndustry = industry || 'services-based';
+    const previewCompany = companyName.trim() || 'this business';
+    const geography = settings.geography || 'the area';
+    const agentName = settings.agentName || 'Mitchel Campbell';
+    const brokerage = settings.companyName || 'AR Business Brokers';
+
+    const opening = `Hey. Is this ${previewContact}? This is ${agentName} calling from ${brokerage}. So I'm reaching out — we are representing a qualified buyer. It's an individual, and they're interested in acquiring a ${previewIndustry} company in and around the ${geography} area and wanted to know whether or not you're interested in learning more about this opportunity.`;
+
+    const voicemail = settings.voicemailEnabled
+      ? buildVoicemailScript({
+          contactName: previewContact,
+          industry: previewIndustry,
+          settings,
+        })
+      : '(Voicemail disabled — the agent will hang up if it reaches voicemail.)';
+
+    return { opening, voicemail, previewCompany };
+  }, [contactName, companyName, industry, settings]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -335,6 +376,39 @@ export default function TestCallPanel({ onBusinessAdded, onBusinessUpdated }: Te
               disabled={isCalling}
               className={inputCls}
             />
+          </div>
+
+          {/* Personalization preview — shows exactly what the agent will say */}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                Call Preview
+              </h3>
+              <span className="text-xs text-zinc-400">Updates live as you type</span>
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs font-medium text-zinc-700">If a person picks up, the agent will open with:</p>
+              <p className="rounded-md bg-white border border-zinc-200 p-2.5 text-xs text-zinc-700 leading-relaxed">
+                &ldquo;{preview.opening}&rdquo;
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs font-medium text-zinc-700">
+                If voicemail is reached, the agent will leave:
+              </p>
+              <p className="rounded-md bg-white border border-zinc-200 p-2.5 text-xs text-zinc-700 leading-relaxed whitespace-pre-wrap">
+                {settings.voicemailEnabled ? `\u201C${preview.voicemail}\u201D` : preview.voicemail}
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 text-xs text-zinc-600">
+              <div><span className="font-medium text-zinc-500">Agent:</span> {settings.agentName || 'Mitchel Campbell'}</div>
+              <div><span className="font-medium text-zinc-500">Brokerage:</span> {settings.companyName || 'AR Business Brokers'}</div>
+              <div><span className="font-medium text-zinc-500">Geography:</span> {settings.geography || '—'}</div>
+              <div><span className="font-medium text-zinc-500">Callback #:</span> {settings.callbackNumber || settings.companyPhone || '—'}</div>
+            </div>
           </div>
 
           <button

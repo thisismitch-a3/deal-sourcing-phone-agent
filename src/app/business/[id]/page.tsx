@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getBusinessById, upsertBusiness } from '@/lib/storage';
-import { formatPhone, formatDate } from '@/lib/utils';
+import { formatPhone, formatDate, buildVoicemailScript, DEFAULT_AGENT_SETTINGS } from '@/lib/utils';
 import type {
   Business,
   CallStatus,
   CallStatusResponse,
   AnalyseCallResponse,
   CallOutcome,
+  AgentSettings,
 } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -32,6 +33,8 @@ export default function BusinessDetailPage() {
   const [business, setBusiness] = useState<Business | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [settings, setSettings] = useState<AgentSettings>(DEFAULT_AGENT_SETTINGS);
+  const [showPreview, setShowPreview] = useState(false);
   const [editForm, setEditForm] = useState({
     companyName: '',
     contactName: '',
@@ -68,6 +71,44 @@ export default function BusinessDetailPage() {
     upsertBusiness(updated);
     setBusiness(updated);
   }, []);
+
+  // Load agent settings for the call preview
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled && data?.settings) {
+          setSettings({ ...DEFAULT_AGENT_SETTINGS, ...data.settings });
+        }
+      })
+      .catch(() => {
+        // Defaults are fine
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Build a live preview of what the agent will say on the call
+  const preview = useMemo(() => {
+    if (!business) return null;
+    const previewContact = business.contactName.trim() || 'the contact';
+    const previewIndustry = business.industry || 'services-based';
+    const geography = settings.geography || 'the area';
+    const agentName = settings.agentName || 'Mitchel Campbell';
+    const brokerage = settings.companyName || 'AR Business Brokers';
+
+    const opening = `Hey. Is this ${previewContact}? This is ${agentName} calling from ${brokerage}. So I'm reaching out — we are representing a qualified buyer. It's an individual, and they're interested in acquiring a ${previewIndustry} company in and around the ${geography} area and wanted to know whether or not you're interested in learning more about this opportunity.`;
+
+    const voicemail = settings.voicemailEnabled
+      ? buildVoicemailScript({
+          contactName: previewContact,
+          industry: previewIndustry,
+          settings,
+        })
+      : '(Voicemail disabled — the agent will hang up if it reaches voicemail.)';
+
+    return { opening, voicemail };
+  }, [business, settings]);
 
   // Auto-poll status while calling
   useEffect(() => {
@@ -358,7 +399,54 @@ export default function BusinessDetailPage() {
         >
           {isEditing ? 'Cancel Edit' : 'Edit'}
         </button>
+        {(canCall || canRetry) && (
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+          >
+            {showPreview ? 'Hide Call Preview' : 'Preview Call'}
+          </button>
+        )}
       </div>
+
+      {/* Call preview — what the agent will say */}
+      {showPreview && preview && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-zinc-900">Call Preview</h2>
+            <span className="text-xs text-zinc-500">Personalized for this business</span>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-medium text-zinc-700">If a person picks up, the agent opens with:</p>
+            <p className="rounded-md bg-white border border-zinc-200 p-3 text-sm text-zinc-700 leading-relaxed">
+              &ldquo;{preview.opening}&rdquo;
+            </p>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-medium text-zinc-700">If voicemail is reached, the agent leaves:</p>
+            <p className="rounded-md bg-white border border-zinc-200 p-3 text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
+              {settings.voicemailEnabled ? `\u201C${preview.voicemail}\u201D` : preview.voicemail}
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 text-xs text-zinc-600 pt-2 border-t border-zinc-200">
+            <div><span className="font-medium text-zinc-500">Contact:</span> {b.contactName || '—'}</div>
+            <div><span className="font-medium text-zinc-500">Company:</span> {b.companyName}</div>
+            <div><span className="font-medium text-zinc-500">Industry:</span> {b.industry || '—'}</div>
+            <div><span className="font-medium text-zinc-500">City:</span> {b.city || '—'}</div>
+            <div><span className="font-medium text-zinc-500">Geography:</span> {settings.geography || '—'}</div>
+            <div><span className="font-medium text-zinc-500">Callback #:</span> {settings.callbackNumber || settings.companyPhone || '—'}</div>
+          </div>
+
+          {(b.researchNotes || b.talkingPoints) && (
+            <div className="pt-2 border-t border-zinc-200 text-xs text-zinc-500">
+              The agent also receives the research notes and talking points shown below as background context.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Edit form */}
       {isEditing && (
