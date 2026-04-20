@@ -892,9 +892,15 @@ export default function SettingsPage() {
                 read-only
               </span>
             </div>
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 leading-relaxed">
+              <span className="font-semibold">Placeholder values shown.</span> The names below
+              (&quot;Example Company Ltd.&quot;, &quot;John Smith&quot;, &quot;Kitchener, ON&quot;,
+              &quot;Manufacturing&quot;) are example data — at call time they are replaced with
+              the actual company, contact, city, industry, description, research notes, and
+              talking points from the business being called.
+            </div>
             <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
-              Exactly what the agent will be told at the start of each outbound call.{' '}
-              <span className="italic">&quot;Example Company Ltd.&quot;</span> is substituted with the real business at call time.
+              This is exactly the structure the agent will be told at the start of each outbound call.
             </p>
             <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 p-3">
               <FormattedPromptPreview text={fullPromptPreview} />

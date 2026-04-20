@@ -190,13 +190,19 @@ If asked for the buyer's name:
 
   // ── Section 3: Opening & Conversation ───────────────────────────────────────
 
-  const contextLines: string[] = [];
+  // Always include the core facts about who we're calling, then add any
+  // optional research data. This is the agent's "what do I know about this
+  // business" cheat sheet, kept consistent across every call.
+  const contextLines: string[] = [
+    `Company name: ${companyName?.trim() || 'unknown'}`,
+    `Contact name: ${contactName?.trim() || 'unknown'}`,
+    `City / location: ${city?.trim() || 'unknown'}`,
+    `Industry: ${industry?.trim() || 'unknown'}`,
+  ];
   if (description?.trim()) contextLines.push(`Company description: ${description.trim()}`);
   if (researchNotes?.trim()) contextLines.push(`Research notes: ${researchNotes.trim()}`);
   if (talkingPoints?.trim()) contextLines.push(`Talking points: ${talkingPoints.trim()}`);
-  const contextBlock = contextLines.length > 0
-    ? `\n\n# Pre-Call Context\n\n${contextLines.join('\n')}`
-    : '';
+  const contextBlock = `\n\n# Pre-Call Context\n\nThese facts are specific to THIS call. Use them naturally where appropriate (e.g. mention the city if asked where you're calling from, refer to research notes if relevant).\n\n${contextLines.join('\n')}`;
 
   const openingAuto = `# Opening — When You Reach the Contact Directly
 
@@ -302,13 +308,9 @@ CRITICAL RULES for the voicemail:
 
 ## If a Real Person Interrupts the Voicemail
 
-If a live human picks up DURING your voicemail message (you hear them say "Hello?", "Hi", "Yes?", or any spontaneous human response), IMMEDIATELY stop the voicemail and switch to the live opening:
+If a live human picks up DURING your voicemail message (you hear them say "Hello?", "Hi", "Yes?", or any spontaneous human response), STOP the voicemail mid-sentence and treat the rest of the call as a normal live conversation.
 
-1. Stop mid-sentence — do not finish the voicemail.
-2. Say: "Oh hey — sorry, thought I was getting voicemail. Is this ${contactName}?"
-3. Then proceed with the normal opening from the "Opening & Conversation" section.
-
-Treat the call as a live conversation from that point forward — do not return to the voicemail script.`
+From that point on, behave exactly as if the person had answered from the start — follow the regular flow in the "Opening & Conversation" section (confirm identity, introduce yourself, state purpose, etc.). React naturally to whatever they say. Do NOT continue the voicemail. Do NOT return to the voicemail script.`
     : `## If You Reach Voicemail
 
 If you reach voicemail, hang up immediately without leaving a message. Do NOT speak, narrate, or say "leaving no message" — just end the call silently.`;
